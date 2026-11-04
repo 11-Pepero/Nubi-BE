@@ -29,10 +29,10 @@ public class GlobalExceptionHandler {
         String detail = e.getBindingResult().getFieldErrors().stream()
                 .findFirst()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .orElse(ErrorCode.INVALID_PARAMETER.getMessage());
+                .orElse(ErrorCode.INVALID_REQUEST.getMessage());
         log.warn("[handleValidationException] 요청 값 검증 실패: {}", detail);
 
-        return toResponse(ErrorCode.INVALID_PARAMETER);
+        return toResponse(ErrorCode.INVALID_REQUEST);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<GlobalResponse<?>> handleTypeMismatchException(TypeMismatchException e) {
         log.warn("[handleTypeMismatchException] 파라미터 타입 불일치: {}", e.getMessage());
 
-        return toResponse(ErrorCode.INVALID_PARAMETER);
+        return toResponse(ErrorCode.INVALID_REQUEST);
     }
 
     @ExceptionHandler({ServletException.class, ErrorResponseException.class})
@@ -57,11 +57,11 @@ public class GlobalExceptionHandler {
 
         int status = errorResponse.getStatusCode().value();
         ErrorCode errorCode = switch (status) {
-            case 404 -> ErrorCode.RESOURCE_NOT_FOUND;
+            case 404 -> ErrorCode.NOT_FOUND;
             case 405 -> ErrorCode.METHOD_NOT_ALLOWED;
             case 406 -> ErrorCode.NOT_ACCEPTABLE;
             case 415 -> ErrorCode.UNSUPPORTED_MEDIA_TYPE;
-            default -> status >= 500 ? ErrorCode.UNKNOWN_ERROR : ErrorCode.INVALID_PARAMETER;
+            default -> status >= 500 ? ErrorCode.INTERNAL_ERROR : ErrorCode.INVALID_REQUEST;
         };
 
         if (status >= 500) {
@@ -80,7 +80,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<GlobalResponse<?>> handleException(Exception e) {
         log.error("[handleException] 처리되지 않은 예외 발생", e);
 
-        return toResponse(ErrorCode.UNKNOWN_ERROR);
+        return toResponse(ErrorCode.INTERNAL_ERROR);
     }
 
     private ResponseEntity<GlobalResponse<?>> toResponse(ErrorCode errorCode) {

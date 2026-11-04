@@ -4,28 +4,30 @@ import lombok.Getter;
 
 @Getter
 public enum ErrorCode {
-    INVALID_REQUEST("C001", "잘못된 요청입니다.", 400),
-    INVALID_PARAMETER("C002", "유효하지 않은 파라미터입니다.", 400),
-    VERIFICATION_INVALID("C4011", "인증 정보가 유효하지 않습니다.", 401),
-    PASSWORD_INVALID("C4012", "비밀번호가 일치하지 않습니다.", 401),
-    TOKEN_INVALID("C4013", "유효하지 않은 토큰입니다.", 401),
-    ACCESS_DENIED("C403", "승인되지 않은 사용자입니다.", 403),
-    USER_DATA_NOT_FOUND("C4041", "사용자를 찾을 수 없습니다.", 404),
-    DATA_NOT_FOUND("C404", "정보를 불러올 수 없습니다.", 404),
-    RESOURCE_NOT_FOUND("C4042", "요청한 경로를 찾을 수 없습니다.", 404),
-    METHOD_NOT_ALLOWED("C405", "지원하지 않는 HTTP 메서드입니다.", 405),
-    NOT_ACCEPTABLE("C406", "지원하지 않는 응답 형식입니다.", 406),
-    EMAIL_DUPLICATION("C4091", "이미 존재하는 이메일입니다.", 409),
-    UNSUPPORTED_MEDIA_TYPE("C415", "지원하지 않는 요청 형식입니다.", 415),
-    UNKNOWN_ERROR("C500", "오류가 발생하였습니다.", 500);
+    INVALID_REQUEST("요청 파라미터가 올바르지 않습니다.", 400),
+    UNAUTHORIZED("인증에 실패했거나 토큰이 만료되었습니다.", 401),
+    PASSWORD_INVALID("비밀번호가 일치하지 않습니다.", 401),
+    TOKEN_INVALID("유효하지 않은 토큰입니다.", 401),
+    FORBIDDEN("접근 권한이 없는 리소스입니다.", 403),
+    NOT_FOUND("요청한 리소스를 찾을 수 없습니다.", 404),
+    USER_NOT_FOUND("사용자를 찾을 수 없습니다.", 404),
+    METHOD_NOT_ALLOWED("지원하지 않는 HTTP 메서드입니다.", 405),
+    NOT_ACCEPTABLE("지원하지 않는 응답 형식입니다.", 406),
+    EMAIL_DUPLICATION("이미 존재하는 이메일입니다.", 409),
+    UNSUPPORTED_MEDIA_TYPE("지원하지 않는 요청 형식입니다.", 415),
+    OCR_EXTRACTION_FAILED("성분표를 인식하지 못했습니다.", 422),
+    TOO_MANY_REQUESTS("요청 한도를 초과했습니다.", 429),
+    INTERNAL_ERROR("서버 오류가 발생했습니다.", 500);
 
-    private final String code;
     private final String message;
     private final int httpStatus;
 
-    ErrorCode(String code, String message, int httpStatus) {
-        this.code = code;
+    ErrorCode(String message, int httpStatus) {
         this.message = message;
         this.httpStatus = httpStatus;
+    }
+
+    public String getCode() {
+        return name();
     }
 }

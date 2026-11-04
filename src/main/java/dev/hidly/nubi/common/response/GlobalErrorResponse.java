@@ -17,8 +17,4 @@ public class GlobalErrorResponse {
                 .message(errorCode.getMessage())
                 .build();
     }
-
-    public static GlobalErrorResponse empty() {
-        return new GlobalErrorResponse(null, null);
-    }
 }
