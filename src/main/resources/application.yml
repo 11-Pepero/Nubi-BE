@@ -1,6 +1,6 @@
 spring:
   application:
-    name: orca
+    name: Nubi
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
   datasource:

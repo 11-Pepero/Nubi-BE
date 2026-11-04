@@ -25,4 +25,4 @@ cors:
 logging:
   level:
     root: INFO
-    dev.hidly.orca: INFO
+    dev.hidly.nubi: INFO

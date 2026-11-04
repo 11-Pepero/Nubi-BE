@@ -6,7 +6,7 @@ plugins {
 
 group = 'dev.hidly'
 version = '0.0.1-SNAPSHOT'
-description = 'orca'
+description = 'Nubi'
 
 java {
     toolchain {
