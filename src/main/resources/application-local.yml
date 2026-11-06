@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:nubi}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nubi}
+    username: ${DB_USERNAME:nubi}
+    password: ${DB_PASSWORD:nubi}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
