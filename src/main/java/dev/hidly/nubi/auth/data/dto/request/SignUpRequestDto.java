@@ -1,24 +1,35 @@
-package dev.hidly.nubi.user.data.dto.request;
+package dev.hidly.nubi.auth.data.dto.request;
 
+import dev.hidly.nubi.organization.data.enums.OrganizationType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-@Data
+@Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class SignUpRequestDto {
     @NotBlank
-    @Email
-    private String email;
+    @Size(max = 100)
+    private String orgName;
+
+    @NotNull
+    private OrganizationType type;
 
     @NotBlank
-    private String name;
+    @Size(max = 200)
+    private String address;
+
+    @NotBlank
+    @Email
+    @Size(max = 100)
+    private String email;
 
     @NotBlank
     @Size(min = 8, max = 64)

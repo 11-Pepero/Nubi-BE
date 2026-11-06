@@ -1,4 +1,4 @@
-package dev.hidly.nubi.user.data.exception;
+package dev.hidly.nubi.auth.data.exception;
 
 import dev.hidly.nubi.common.response.ErrorCode;
 import dev.hidly.nubi.common.response.GlobalException;

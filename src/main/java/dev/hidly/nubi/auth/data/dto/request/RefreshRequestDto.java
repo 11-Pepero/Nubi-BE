@@ -1,16 +1,16 @@
-package dev.hidly.nubi.user.data.dto.request;
+package dev.hidly.nubi.auth.data.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-@Data
+@Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ReissueRequestDto {
+public class RefreshRequestDto {
     @NotBlank
     private String refreshToken;
 }
