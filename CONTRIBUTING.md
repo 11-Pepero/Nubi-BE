@@ -126,7 +126,6 @@ public class GroupController {
 | 401 | `UNAUTHORIZED` | 인증 실패/토큰 만료 |
 | 403 | `FORBIDDEN` | 타인의 리소스 접근 |
 | 404 | `NOT_FOUND` | 리소스 없음 |
-| 422 | `OCR_EXTRACTION_FAILED` | 성분표 인식 실패 |
 | 429 | `TOO_MANY_REQUESTS` | 요청 한도 초과 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 |
 

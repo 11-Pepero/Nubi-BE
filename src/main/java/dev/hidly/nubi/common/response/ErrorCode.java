@@ -25,7 +25,6 @@ public enum ErrorCode {
     NOT_ACCEPTABLE("지원하지 않는 응답 형식입니다.", 406),
     EMAIL_DUPLICATION("이미 존재하는 이메일입니다.", 409),
     UNSUPPORTED_MEDIA_TYPE("지원하지 않는 요청 형식입니다.", 415),
-    OCR_EXTRACTION_FAILED("성분표를 인식하지 못했습니다.", 422),
     TOO_MANY_REQUESTS("요청 한도를 초과했습니다.", 429),
     INTERNAL_ERROR("서버 오류가 발생했습니다.", 500),
     FILE_UPLOAD_FAILED("파일을 저장하지 못했습니다.", 500);
