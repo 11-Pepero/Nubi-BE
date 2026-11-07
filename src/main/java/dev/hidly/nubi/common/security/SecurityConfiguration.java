@@ -67,6 +67,11 @@ public class SecurityConfiguration {
                         ).permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/groups/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/programs",
+                                "/api/v1/programs/{programId:\\d+}",
+                                "/api/v1/venues/{venueId:\\d+}/facilities"
+                        ).permitAll()
                         .anyRequest().authenticated()
         );
 
