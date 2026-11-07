@@ -17,6 +17,7 @@ public enum ErrorCode {
     NOT_FOUND("요청한 리소스를 찾을 수 없습니다.", 404),
     MEMBER_NOT_FOUND("담당자를 찾을 수 없습니다.", 404),
     PROGRAM_NOT_FOUND("행사를 찾을 수 없습니다.", 404),
+    IMAGE_NOT_FOUND("사진을 찾을 수 없습니다.", 404),
     METHOD_NOT_ALLOWED("지원하지 않는 HTTP 메서드입니다.", 405),
     NOT_ACCEPTABLE("지원하지 않는 응답 형식입니다.", 406),
     EMAIL_DUPLICATION("이미 존재하는 이메일입니다.", 409),

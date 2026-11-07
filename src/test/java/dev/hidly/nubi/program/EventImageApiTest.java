@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -102,6 +103,32 @@ class EventImageApiTest {
                         .content("{\"imageIds\":[%s,%s,%s]}".formatted(ids.get(0), ids.get(0), ids.get(1))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("IMAGE_ORDER_INVALID"));
+    }
+
+    @Test
+    void 사진을_지우면_파일도_지워지고_순서가_다시_매겨진다() throws Exception {
+        Login host = signUp();
+        Long eventId = createEvent(host.organizationId());
+        String uploaded = mockMvc.perform(multipart("/api/v1/events/{eventId}/images", eventId).file(png()).file(png())
+                        .header("Authorization", "Bearer " + host.accessToken()))
+                .andReturn().getResponse().getContentAsString();
+        Number firstId = JsonPath.read(uploaded, "$.data[0].imageId");
+        Number secondId = JsonPath.read(uploaded, "$.data[1].imageId");
+        String firstUrl = JsonPath.read(uploaded, "$.data[0].url");
+
+        mockMvc.perform(delete("/api/v1/events/{eventId}/images/{imageId}", eventId, firstId)
+                        .header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].imageId").value(secondId.longValue()))
+                .andExpect(jsonPath("$.data[0].sortOrder").value(0));
+        org.assertj.core.api.Assertions.assertThat(
+                java.nio.file.Path.of("build/test-uploads", firstUrl.substring("/uploads/".length()))).doesNotExist();
+
+        mockMvc.perform(delete("/api/v1/events/{eventId}/images/{imageId}", eventId, firstId)
+                        .header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("IMAGE_NOT_FOUND"));
     }
 
     @Test

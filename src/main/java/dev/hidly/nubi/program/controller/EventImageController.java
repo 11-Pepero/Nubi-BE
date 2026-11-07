@@ -32,4 +32,10 @@ public class EventImageController {
                                                                  @Valid @RequestBody ProgramImageOrderRequestDto request) {
         return programImageService.reorder(eventId, request);
     }
+
+    @DeleteMapping("/{imageId}")
+    @Operation(summary = "사진 지우기", description = "사진을 지우고 남은 사진의 순서를 0부터 다시 매깁니다.")
+    public GlobalResponse<List<ProgramImageResponseDto>> delete(@PathVariable Long eventId, @PathVariable Long imageId) {
+        return programImageService.delete(eventId, imageId);
+    }
 }

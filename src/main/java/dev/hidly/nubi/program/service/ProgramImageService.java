@@ -8,6 +8,7 @@ import dev.hidly.nubi.program.data.dto.response.ProgramImageResponseDto;
 import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.entity.ProgramImage;
 import dev.hidly.nubi.program.data.exception.ImageCountExceededException;
+import dev.hidly.nubi.program.data.exception.ImageNotFoundException;
 import dev.hidly.nubi.program.data.exception.ImageOrderInvalidException;
 import dev.hidly.nubi.program.data.exception.ProgramAccessDeniedException;
 import dev.hidly.nubi.program.data.exception.ProgramNotFoundException;
@@ -16,6 +17,8 @@ import dev.hidly.nubi.program.data.repository.ProgramRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
@@ -80,6 +83,29 @@ public class ProgramImageService {
             ordered.add(image);
         }
         return GlobalResponse.ok(ordered.stream().map(ProgramImageResponseDto::from).toList());
+    }
+
+    @Transactional
+    public GlobalResponse<List<ProgramImageResponseDto>> delete(Long eventId, Long imageId) {
+        Program program = getHostedProgram(eventId);
+        List<ProgramImage> images = programImageRepository.findAllByProgramIdOrderBySortOrderAsc(program.getId());
+        ProgramImage target = images.stream()
+                .filter(image -> image.getId().equals(imageId))
+                .findFirst()
+                .orElseThrow(ImageNotFoundException::new);
+
+        programImageRepository.delete(target);
+        images.remove(target);
+        for (int i = 0; i < images.size(); i++) {
+            images.get(i).changeSortOrder(i);
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                fileStorageService.delete(target.getUrl());
+            }
+        });
+        return GlobalResponse.ok(images.stream().map(ProgramImageResponseDto::from).toList());
     }
 
     private Program getHostedProgram(Long eventId) {
