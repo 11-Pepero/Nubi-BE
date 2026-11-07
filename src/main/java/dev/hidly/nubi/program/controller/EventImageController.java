@@ -5,6 +5,7 @@ import dev.hidly.nubi.program.data.dto.request.ProgramImageOrderRequestDto;
 import dev.hidly.nubi.program.data.dto.response.ProgramImageResponseDto;
 import dev.hidly.nubi.program.service.ProgramImageService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -13,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
+@Tag(name = "행사 관리", description = "행사 등록, 수정, 사진, 신청 기관 관리")
 @RestController
 @RequestMapping("/api/v1/events/{eventId}/images")
 @RequiredArgsConstructor
