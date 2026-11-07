@@ -7,6 +7,7 @@ import dev.hidly.nubi.auth.data.dto.response.TokenResponseDto;
 import dev.hidly.nubi.auth.service.AuthService;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "인증과 기관", description = "기관 가입, 로그인, 토큰 재발급")
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
