@@ -1,9 +1,11 @@
 package dev.hidly.nubi.program.controller;
 
 import dev.hidly.nubi.common.response.GlobalResponse;
+import dev.hidly.nubi.program.data.dto.request.ProgramImageOrderRequestDto;
 import dev.hidly.nubi.program.data.dto.response.ProgramImageResponseDto;
 import dev.hidly.nubi.program.service.ProgramImageService;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -22,5 +24,12 @@ public class EventImageController {
     public GlobalResponse<List<ProgramImageResponseDto>> upload(@PathVariable Long eventId,
                                                                 @RequestPart("images") List<MultipartFile> images) {
         return programImageService.upload(eventId, images);
+    }
+
+    @PatchMapping("/order")
+    @Operation(summary = "사진 순서 바꾸기", description = "행사의 모든 사진 ID를 원하는 순서대로 보냅니다. 맨 앞 사진이 대표 사진이 됩니다.")
+    public GlobalResponse<List<ProgramImageResponseDto>> reorder(@PathVariable Long eventId,
+                                                                 @Valid @RequestBody ProgramImageOrderRequestDto request) {
+        return programImageService.reorder(eventId, request);
     }
 }

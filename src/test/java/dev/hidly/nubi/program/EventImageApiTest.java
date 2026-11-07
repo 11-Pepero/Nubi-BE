@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -75,6 +76,32 @@ class EventImageApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(3))
                 .andExpect(jsonPath("$.data[2].sortOrder").value(2));
+    }
+
+    @Test
+    void 사진_순서를_바꾸면_맨_앞이_대표가_된다() throws Exception {
+        Login host = signUp();
+        Long eventId = createEvent(host.organizationId());
+        String uploaded = mockMvc.perform(multipart("/api/v1/events/{eventId}/images", eventId).file(png()).file(png()).file(png())
+                        .header("Authorization", "Bearer " + host.accessToken()))
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<Number> ids = JsonPath.read(uploaded, "$.data[*].imageId");
+
+        mockMvc.perform(patch("/api/v1/events/{eventId}/images/order", eventId)
+                        .header("Authorization", "Bearer " + host.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"imageIds\":[%s,%s,%s]}".formatted(ids.get(2), ids.get(0), ids.get(1))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].imageId").value(ids.get(2).longValue()))
+                .andExpect(jsonPath("$.data[0].sortOrder").value(0))
+                .andExpect(jsonPath("$.data[2].imageId").value(ids.get(1).longValue()));
+
+        mockMvc.perform(patch("/api/v1/events/{eventId}/images/order", eventId)
+                        .header("Authorization", "Bearer " + host.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"imageIds\":[%s,%s,%s]}".formatted(ids.get(0), ids.get(0), ids.get(1))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("IMAGE_ORDER_INVALID"));
     }
 
     @Test

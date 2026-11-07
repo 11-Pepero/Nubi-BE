@@ -8,6 +8,7 @@ public enum ErrorCode {
     IMAGE_TYPE_NOT_ALLOWED("JPG, PNG, WEBP 이미지만 올릴 수 있습니다.", 400),
     IMAGE_SIZE_EXCEEDED("이미지는 한 장에 5MB까지 올릴 수 있습니다.", 400),
     IMAGE_COUNT_EXCEEDED("행사 사진은 1장 이상, 10장까지 올릴 수 있습니다.", 400),
+    IMAGE_ORDER_INVALID("행사의 모든 사진 ID를 한 번씩 보내야 합니다.", 400),
     UNAUTHORIZED("인증에 실패했거나 토큰이 만료되었습니다.", 401),
     INVALID_CREDENTIALS("이메일 또는 비밀번호가 올바르지 않습니다.", 401),
     TOKEN_INVALID("유효하지 않은 토큰입니다.", 401),

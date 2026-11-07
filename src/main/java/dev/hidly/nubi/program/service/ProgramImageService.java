@@ -3,10 +3,12 @@ package dev.hidly.nubi.program.service;
 import dev.hidly.nubi.common.file.FileStorageService;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.security.SecurityUtil;
+import dev.hidly.nubi.program.data.dto.request.ProgramImageOrderRequestDto;
 import dev.hidly.nubi.program.data.dto.response.ProgramImageResponseDto;
 import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.entity.ProgramImage;
 import dev.hidly.nubi.program.data.exception.ImageCountExceededException;
+import dev.hidly.nubi.program.data.exception.ImageOrderInvalidException;
 import dev.hidly.nubi.program.data.exception.ProgramAccessDeniedException;
 import dev.hidly.nubi.program.data.exception.ProgramNotFoundException;
 import dev.hidly.nubi.program.data.repository.ProgramImageRepository;
@@ -18,6 +20,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -54,6 +60,26 @@ public class ProgramImageService {
         }
 
         return GlobalResponse.ok(current.stream().map(ProgramImageResponseDto::from).toList());
+    }
+
+    @Transactional
+    public GlobalResponse<List<ProgramImageResponseDto>> reorder(Long eventId, ProgramImageOrderRequestDto request) {
+        Program program = getHostedProgram(eventId);
+        Map<Long, ProgramImage> images = programImageRepository.findAllByProgramIdOrderBySortOrderAsc(program.getId())
+                .stream()
+                .collect(Collectors.toMap(ProgramImage::getId, Function.identity()));
+        List<Long> imageIds = request.imageIds();
+        if (imageIds.size() != images.size() || !Set.copyOf(imageIds).equals(images.keySet())) {
+            throw new ImageOrderInvalidException();
+        }
+
+        List<ProgramImage> ordered = new ArrayList<>();
+        for (int i = 0; i < imageIds.size(); i++) {
+            ProgramImage image = images.get(imageIds.get(i));
+            image.changeSortOrder(i);
+            ordered.add(image);
+        }
+        return GlobalResponse.ok(ordered.stream().map(ProgramImageResponseDto::from).toList());
     }
 
     private Program getHostedProgram(Long eventId) {

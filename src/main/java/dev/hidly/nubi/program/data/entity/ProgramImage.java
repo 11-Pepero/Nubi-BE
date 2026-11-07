@@ -32,4 +32,8 @@ public class ProgramImage extends BaseTimeEntity {
         this.url = url;
         this.sortOrder = sortOrder;
     }
+
+    public void changeSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
 }
