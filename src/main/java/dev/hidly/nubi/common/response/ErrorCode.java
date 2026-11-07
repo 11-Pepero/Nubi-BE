@@ -16,6 +16,8 @@ public enum ErrorCode {
     PROGRAM_ACCESS_DENIED("주최 기관만 행사를 관리할 수 있습니다.", 403),
     NOT_FOUND("요청한 리소스를 찾을 수 없습니다.", 404),
     MEMBER_NOT_FOUND("담당자를 찾을 수 없습니다.", 404),
+    GROUP_NOT_FOUND("그룹을 찾을 수 없습니다.", 404),
+    SUPPORT_TAG_NOT_FOUND("지원 항목을 찾을 수 없습니다.", 404),
     PROGRAM_NOT_FOUND("행사를 찾을 수 없습니다.", 404),
     IMAGE_NOT_FOUND("사진을 찾을 수 없습니다.", 404),
     METHOD_NOT_ALLOWED("지원하지 않는 HTTP 메서드입니다.", 405),
