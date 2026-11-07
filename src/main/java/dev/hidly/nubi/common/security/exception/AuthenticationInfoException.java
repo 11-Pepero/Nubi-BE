@@ -1,15 +1,10 @@
 package dev.hidly.nubi.common.security.exception;
 
-public class AuthenticationInfoException extends RuntimeException {
+import dev.hidly.nubi.common.response.ErrorCode;
+import dev.hidly.nubi.common.response.GlobalException;
+
+public class AuthenticationInfoException extends GlobalException {
     public AuthenticationInfoException() {
-        super("사용자 정보를 찾을 수 없습니다.");
-    }
-
-    public AuthenticationInfoException(String message) {
-        super(message);
-    }
-
-    public AuthenticationInfoException(String message, Throwable cause) {
-        super(message, cause);
+        super(ErrorCode.UNAUTHORIZED);
     }
 }

@@ -16,7 +16,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
@@ -24,6 +23,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -37,6 +37,8 @@ public class JwtTokenProvider {
     private static final String BLACKLIST_VALUE = "logout";
 
     private static final String AUTHORITIES_CLAIM = "authorities";
+    private static final String MEMBER_ID_CLAIM = "memberId";
+    private static final String ORGANIZATION_ID_CLAIM = "organizationId";
     private static final String TOKEN_TYPE_CLAIM = "token_type";
     private static final String ACCESS_TOKEN_TYPE = "access";
     private static final String REFRESH_TOKEN_TYPE = "refresh";
@@ -59,36 +61,30 @@ public class JwtTokenProvider {
         this.redisService = redisService;
     }
 
-    private String createToken(String email, String tokenType, String authorities, Date expireDate) {
+    private JwtBuilder baseToken(String email, String tokenType, Date expireDate) {
         log.info("[createToken] 새 {} JWT 발급 됨: {}", tokenType, email);
-        JwtBuilder builder = Jwts.builder()
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(email)
                 .claim(TOKEN_TYPE_CLAIM, tokenType)
                 .expiration(expireDate)
                 .signWith(key, Jwts.SIG.HS256);
-
-        if (authorities != null && !authorities.isEmpty()) {
-            builder.claim(AUTHORITIES_CLAIM, authorities);
-        }
-
-        return builder.compact();
     }
 
-    public AuthenticationToken generateToken(Authentication authentication) {
-        String username = authentication.getName();
+    public AuthenticationToken generateToken(LoginMember loginMember) {
+        String username = loginMember.email();
 
         log.info("[generateToken] 새 JWT 발급 시도: {}", username);
 
-        String authorities = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.joining(","));
-
         long now = (new Date()).getTime();
 
-        String accessToken = createToken(username, ACCESS_TOKEN_TYPE, authorities,
-                new Date(now + ACCESS_TOKEN_EXPIRE_TIME));
-        String refreshToken = createToken(username, REFRESH_TOKEN_TYPE, null,
-                new Date(now + REFRESH_TOKEN_EXPIRE_TIME));
+        String accessToken = baseToken(username, ACCESS_TOKEN_TYPE, new Date(now + ACCESS_TOKEN_EXPIRE_TIME))
+                .claim(MEMBER_ID_CLAIM, loginMember.memberId())
+                .claim(ORGANIZATION_ID_CLAIM, loginMember.organizationId())
+                .claim(AUTHORITIES_CLAIM, loginMember.role())
+                .compact();
+        String refreshToken = baseToken(username, REFRESH_TOKEN_TYPE, new Date(now + REFRESH_TOKEN_EXPIRE_TIME))
+                .compact();
 
         log.info("[generateToken] 발급된 Refresh Token이 Redis에 저장 됨");
         redisService.setValues(REFRESH_KEY_PREFIX + username, refreshToken,
@@ -149,7 +145,8 @@ public class JwtTokenProvider {
         Claims claims = parseClaims(accessToken);
         Object authClaim = claims.get(AUTHORITIES_CLAIM);
 
-        if (!ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM)) || authClaim == null || authClaim.toString().isEmpty()) {
+        if (!ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM)) || authClaim == null || authClaim.toString().isEmpty()
+                || claims.get(MEMBER_ID_CLAIM) == null || claims.get(ORGANIZATION_ID_CLAIM) == null) {
             throw new IllegalArgumentException("Access Token이 아닌 JWT로 인증 정보를 만들 수 없습니다.");
         }
 
@@ -157,8 +154,11 @@ public class JwtTokenProvider {
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toList());
 
-        UserDetails principal = new org.springframework.security.core.userdetails.User(claims.getSubject(),
-                "", authorities);
+        LoginMember principal = new LoginMember(
+                claims.get(MEMBER_ID_CLAIM, Long.class),
+                claims.get(ORGANIZATION_ID_CLAIM, Long.class),
+                claims.getSubject(),
+                authClaim.toString());
         return new UsernamePasswordAuthenticationToken(principal, "", authorities);
     }
 
@@ -193,6 +193,12 @@ public class JwtTokenProvider {
             if (!expectedType.equals(claims.get(TOKEN_TYPE_CLAIM))) {
                 log.warn("[validateToken] 용도가 다른 JWT 요청 (기대: {}, 실제: {})",
                         expectedType, claims.get(TOKEN_TYPE_CLAIM));
+                return false;
+            }
+
+            if (ACCESS_TOKEN_TYPE.equals(expectedType)
+                    && (claims.get(MEMBER_ID_CLAIM) == null || claims.get(ORGANIZATION_ID_CLAIM) == null)) {
+                log.warn("[validateToken] 담당자 정보가 없는 Access Token 요청");
                 return false;
             }
 
