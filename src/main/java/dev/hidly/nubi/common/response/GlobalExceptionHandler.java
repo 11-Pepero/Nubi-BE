@@ -11,6 +11,7 @@ import org.springframework.web.ErrorResponseException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @Slf4j
 @RestControllerAdvice
@@ -47,6 +48,13 @@ public class GlobalExceptionHandler {
         log.warn("[handleTypeMismatchException] 파라미터 타입 불일치: {}", e.getMessage());
 
         return toResponse(ErrorCode.INVALID_REQUEST);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<GlobalResponse<?>> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
+        log.warn("[handleMaxUploadSizeExceededException] 업로드 용량 초과: {}", e.getMessage());
+
+        return toResponse(ErrorCode.IMAGE_SIZE_EXCEEDED);
     }
 
     @ExceptionHandler({ServletException.class, ErrorResponseException.class})
