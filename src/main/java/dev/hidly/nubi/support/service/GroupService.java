@@ -7,10 +7,10 @@ import dev.hidly.nubi.support.data.dto.request.GroupRequestDto;
 import dev.hidly.nubi.support.data.dto.request.GroupSupportRequestDto;
 import dev.hidly.nubi.support.data.dto.response.GroupResponseDto;
 import dev.hidly.nubi.support.data.dto.response.GroupSummaryResponseDto;
+import dev.hidly.nubi.support.data.dto.response.SupportCountResponseDto;
 import dev.hidly.nubi.support.data.entity.GroupSupport;
 import dev.hidly.nubi.support.data.entity.SupportGroup;
 import dev.hidly.nubi.support.data.entity.SupportTag;
-import dev.hidly.nubi.support.data.enums.SupportCategory;
 import dev.hidly.nubi.support.data.exception.GroupAccessDeniedException;
 import dev.hidly.nubi.support.data.exception.GroupNotFoundException;
 import dev.hidly.nubi.support.data.exception.InvalidGroupSupportException;
@@ -22,21 +22,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class GroupService {
-    private static final Set<String> WHEELCHAIR_CODES = Set.of("WHEELCHAIR", "POWER_WHEELCHAIR");
-
     private final SupportGroupRepository supportGroupRepository;
     private final SupportTagRepository supportTagRepository;
     private final OrganizationRepository organizationRepository;
@@ -97,20 +95,27 @@ public class GroupService {
         List<SupportGroup> groups = supportGroupRepository.findActiveWithSupports(SecurityUtil.getOrganizationId());
 
         int memberCount = groups.stream().mapToInt(SupportGroup::getMemberCount).sum();
-        int wheelchairCount = sumQuantity(groups, tag -> WHEELCHAIR_CODES.contains(tag.getCode()));
-        int companionCount = sumQuantity(groups, tag -> tag.getCategory() == SupportCategory.COMPANION);
 
-        return GlobalResponse.ok(new GroupSummaryResponseDto(groups.size(), memberCount, wheelchairCount, companionCount));
-    }
+        Map<SupportTag, Integer> countByTag = new LinkedHashMap<>();
+        for (SupportGroup group : groups) {
+            for (GroupSupport support : group.getSupports()) {
+                int count = support.getQuantity() != null ? support.getQuantity() : group.getMemberCount();
+                countByTag.merge(support.getSupportTag(), count, Integer::sum);
+            }
+        }
 
-    private int sumQuantity(List<SupportGroup> groups, Predicate<SupportTag> tagFilter) {
-        return groups.stream()
-                .flatMap(group -> group.getSupports().stream())
-                .filter(support -> tagFilter.test(support.getSupportTag()))
-                .map(GroupSupport::getQuantity)
-                .filter(Objects::nonNull)
-                .mapToInt(Integer::intValue)
-                .sum();
+        List<SupportCountResponseDto> supports = countByTag.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<SupportTag, Integer>>comparingInt(Map.Entry::getValue).reversed()
+                        .thenComparing(entry -> entry.getKey().getId()))
+                .map(entry -> new SupportCountResponseDto(
+                        entry.getKey().getId(),
+                        entry.getKey().getCategory(),
+                        entry.getKey().getCode(),
+                        entry.getKey().getLabel(),
+                        entry.getValue()))
+                .toList();
+
+        return GlobalResponse.ok(new GroupSummaryResponseDto(groups.size(), memberCount, supports));
     }
 
     private SupportGroup getOwnedGroup(Long groupId) {

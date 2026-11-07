@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -134,7 +135,10 @@ class GroupApiTest {
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)))
-                .andExpect(jsonPath("$.data[0].category").value("COMMUNICATION"));
+                .andExpect(jsonPath("$.data[0].category").value("COMMUNICATION"))
+                .andExpect(jsonPath("$.data[0].label").value("의사소통"))
+                .andExpect(jsonPath("$.data[0].tags[*].label",
+                        containsInAnyOrder("쉬운 말 안내", "그림 안내판", "수어 통역")));
     }
 
     @Test
@@ -190,7 +194,7 @@ class GroupApiTest {
     }
 
     @Test
-    void 기관_전체_요약은_그룹_인원과_휠체어_동반_필요를_합친다() throws Exception {
+    void 기관_전체_요약은_인원을_적은_항목은_그_인원_아니면_그룹_인원_전체로_센다() throws Exception {
         createGroupId(groupBody("주간활동 A", 10, 3, 5));
         createGroupId(groupBody("주간활동 B", 6, 1, 2));
 
@@ -198,8 +202,23 @@ class GroupApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.groupCount").value(2))
                 .andExpect(jsonPath("$.data.memberCount").value(16))
-                .andExpect(jsonPath("$.data.wheelchairCount").value(4))
-                .andExpect(jsonPath("$.data.companionCount").value(7));
+                .andExpect(jsonPath("$.data.supports", hasSize(3)))
+                .andExpect(jsonPath("$.data.supports[0].code").value("EASY_WORDS"))
+                .andExpect(jsonPath("$.data.supports[0].label").value("쉬운 말 안내"))
+                .andExpect(jsonPath("$.data.supports[0].count").value(16))
+                .andExpect(jsonPath("$.data.supports[1].code").value("COMPANION"))
+                .andExpect(jsonPath("$.data.supports[1].count").value(7))
+                .andExpect(jsonPath("$.data.supports[2].code").value("WHEELCHAIR"))
+                .andExpect(jsonPath("$.data.supports[2].count").value(4));
+    }
+
+    @Test
+    void 그룹이_없으면_요약은_0이다() throws Exception {
+        mockMvc.perform(get("/api/v1/groups/summary").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groupCount").value(0))
+                .andExpect(jsonPath("$.data.memberCount").value(0))
+                .andExpect(jsonPath("$.data.supports", hasSize(0)));
     }
 
     @Test

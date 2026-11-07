@@ -40,4 +40,13 @@ public class SupportTag extends BaseTimeEntity {
         this.code = code;
         this.label = label;
     }
+
+    public boolean update(SupportCategory category, String label) {
+        if (this.category == category && this.label.equals(label)) {
+            return false;
+        }
+        this.category = category;
+        this.label = label;
+        return true;
+    }
 }
