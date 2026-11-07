@@ -4,6 +4,8 @@ import dev.hidly.nubi.common.security.exception.AuthenticationInfoException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.Optional;
+
 public class SecurityUtil {
     public static LoginMember getLoginMember() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -11,6 +13,14 @@ public class SecurityUtil {
             throw new AuthenticationInfoException();
         }
         return loginMember;
+    }
+
+    public static Optional<Long> findOrganizationId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof LoginMember loginMember) {
+            return Optional.of(loginMember.organizationId());
+        }
+        return Optional.empty();
     }
 
     public static String getUsername() {
