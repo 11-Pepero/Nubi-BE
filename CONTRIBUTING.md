@@ -57,6 +57,23 @@ feat: 회원가입 기능 구현 (#1)
 
 본문은 PR 템플릿(`.github/PULL_REQUEST_TEMPLATE.md`)을 따릅니다.
 
+## Label
+
+이슈와 PR 오른쪽 **Labels**에서 작업 종류에 맞는 라벨을 붙여 주세요. 라벨 이름은 커밋 태그와 같습니다.
+
+| Label | Description |
+| --- | --- |
+| feat | 새 기능 추가 |
+| fix | 버그 수정 |
+| refactor | 코드 리팩토링 |
+| docs | 문서 수정 |
+| build | 빌드 관련 파일 수정 |
+| ci | CI 설정 수정 |
+| chore | 그 외 자잘한 수정 |
+| remove | 파일 삭제 |
+
+이슈 템플릿으로 만든 이슈는 라벨이 자동으로 붙습니다 (Feature → `feat`, Bug → `fix`, Refactor → `refactor`). PR은 템플릿으로 라벨을 붙일 수 없어서 직접 선택합니다.
+
 ## 공통 응답 포맷
 
 ### 성공 시
