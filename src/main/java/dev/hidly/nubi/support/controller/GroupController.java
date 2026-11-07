@@ -38,13 +38,13 @@ public class GroupController {
     }
 
     @GetMapping("/summary")
-    @Operation(summary = "기관 전체 요약", description = "그룹 수, 인원, 휠체어, 동반 필요 합계")
+    @Operation(summary = "기관 전체 요약", description = "그룹 수, 전체 인원, 지원 항목별 필요 인원")
     public GlobalResponse<GroupSummaryResponseDto> getSummary() {
         return groupService.getSummary();
     }
 
     @GetMapping("/{groupId}")
-    @Operation(summary = "그룹 상세", description = "공통 지원 목록")
+    @Operation(summary = "그룹 상세", description = "공통 지원 목록과 개별 케어 수")
     public GlobalResponse<GroupResponseDto> getGroup(@PathVariable Long groupId) {
         return groupService.getGroup(groupId);
     }
