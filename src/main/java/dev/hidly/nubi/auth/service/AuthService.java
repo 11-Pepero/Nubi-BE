@@ -14,6 +14,7 @@ import dev.hidly.nubi.common.security.LoginMember;
 import dev.hidly.nubi.common.security.exception.TokenInvalidException;
 import dev.hidly.nubi.organization.data.entity.Member;
 import dev.hidly.nubi.organization.data.entity.Organization;
+import dev.hidly.nubi.organization.data.enums.District;
 import dev.hidly.nubi.organization.data.enums.MemberRole;
 import dev.hidly.nubi.organization.data.repository.MemberRepository;
 import dev.hidly.nubi.organization.data.repository.OrganizationRepository;
@@ -44,10 +45,12 @@ public class AuthService {
             throw new EmailDuplicationException();
         }
 
+        String address = request.getAddress().trim();
         Organization organization = organizationRepository.save(Organization.builder()
                 .name(request.getOrgName().trim())
                 .type(request.getType())
-                .address(request.getAddress().trim())
+                .address(address)
+                .district(District.fromAddress(address).orElse(null))
                 .build());
 
         Member member;

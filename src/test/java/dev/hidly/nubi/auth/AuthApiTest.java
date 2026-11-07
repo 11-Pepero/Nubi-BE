@@ -1,6 +1,9 @@
 package dev.hidly.nubi.auth;
 
 import com.jayway.jsonpath.JsonPath;
+import dev.hidly.nubi.organization.data.entity.Organization;
+import dev.hidly.nubi.organization.data.enums.District;
+import dev.hidly.nubi.organization.data.repository.OrganizationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -22,6 +26,9 @@ class AuthApiTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private OrganizationRepository organizationRepository;
 
     private String uniqueEmail() {
         return "test-" + UUID.randomUUID() + "@nubi.dev";
@@ -182,5 +189,26 @@ class AuthApiTest {
                                 {"refreshToken":"%s"}
                                 """.formatted(refreshToken)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void 주소에_구_이름이_있으면_기관의_구가_채워진다() throws Exception {
+        Number organizationId = JsonPath.read(signUp(uniqueEmail()), "$.data.organizationId");
+
+        Organization organization = organizationRepository.findById(organizationId.longValue()).orElseThrow();
+        assertThat(organization.getDistrict()).isEqualTo(District.CHEOIN);
+    }
+
+    @Test
+    void 주소에_용인시_구_이름이_없으면_구는_비어_있다() throws Exception {
+        String response = mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signUpBody(uniqueEmail()).replace("용인시 처인구 중부대로 1199", "서울시 중구 세종대로 110")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Number organizationId = JsonPath.read(response, "$.data.organizationId");
+
+        Organization organization = organizationRepository.findById(organizationId.longValue()).orElseThrow();
+        assertThat(organization.getDistrict()).isNull();
     }
 }
