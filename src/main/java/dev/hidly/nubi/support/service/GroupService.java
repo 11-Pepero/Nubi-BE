@@ -15,6 +15,7 @@ import dev.hidly.nubi.support.data.exception.GroupAccessDeniedException;
 import dev.hidly.nubi.support.data.exception.GroupNotFoundException;
 import dev.hidly.nubi.support.data.exception.InvalidGroupSupportException;
 import dev.hidly.nubi.support.data.exception.SupportTagNotFoundException;
+import dev.hidly.nubi.support.data.repository.CarePersonRepository;
 import dev.hidly.nubi.support.data.repository.SupportGroupRepository;
 import dev.hidly.nubi.support.data.repository.SupportTagRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,16 +37,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class GroupService {
     private final SupportGroupRepository supportGroupRepository;
+    private final CarePersonRepository carePersonRepository;
     private final SupportTagRepository supportTagRepository;
     private final OrganizationRepository organizationRepository;
 
     @Transactional(readOnly = true)
     public GlobalResponse<List<GroupResponseDto>> getGroups() {
-        List<GroupResponseDto> groups = supportGroupRepository
-                .findActiveWithSupports(SecurityUtil.getOrganizationId()).stream()
-                .map(GroupResponseDto::from)
-                .toList();
-        return GlobalResponse.ok(groups);
+        List<SupportGroup> groups = supportGroupRepository.findActiveWithSupports(SecurityUtil.getOrganizationId());
+        Map<Long, Long> careCounts = countCarePersons(groups.stream().map(SupportGroup::getId).toList());
+
+        return GlobalResponse.ok(groups.stream()
+                .map(group -> GroupResponseDto.of(group, careCounts.getOrDefault(group.getId(), 0L)))
+                .toList());
     }
 
     @Transactional
@@ -62,12 +65,12 @@ public class GroupService {
         supportGroupRepository.save(group);
         log.info("[createGroup] 그룹 생성: organizationId={}, groupId={}", organizationId, group.getId());
 
-        return GlobalResponse.ok(GroupResponseDto.from(group));
+        return GlobalResponse.ok(GroupResponseDto.of(group, 0));
     }
 
     @Transactional(readOnly = true)
     public GlobalResponse<GroupResponseDto> getGroup(Long groupId) {
-        return GlobalResponse.ok(GroupResponseDto.from(getOwnedGroup(groupId)));
+        return GlobalResponse.ok(withCareCount(getOwnedGroup(groupId)));
     }
 
     @Transactional
@@ -79,14 +82,15 @@ public class GroupService {
         supportGroupRepository.flush();
         log.info("[updateGroup] 그룹 수정: groupId={}", groupId);
 
-        return GlobalResponse.ok(GroupResponseDto.from(group));
+        return GlobalResponse.ok(withCareCount(group));
     }
 
     @Transactional
     public GlobalResponse<Void> deleteGroup(Long groupId) {
         SupportGroup group = getOwnedGroup(groupId);
         group.delete();
-        log.info("[deleteGroup] 그룹 삭제: groupId={}", groupId);
+        int cleared = carePersonRepository.clearGroup(groupId);
+        log.info("[deleteGroup] 그룹 삭제: groupId={}, 그룹이 비워진 개별 케어 {}명", groupId, cleared);
         return GlobalResponse.ok();
     }
 
@@ -116,6 +120,18 @@ public class GroupService {
                 .toList();
 
         return GlobalResponse.ok(new GroupSummaryResponseDto(groups.size(), memberCount, supports));
+    }
+
+    private GroupResponseDto withCareCount(SupportGroup group) {
+        return GroupResponseDto.of(group, countCarePersons(List.of(group.getId())).getOrDefault(group.getId(), 0L));
+    }
+
+    private Map<Long, Long> countCarePersons(List<Long> groupIds) {
+        if (groupIds.isEmpty()) {
+            return Map.of();
+        }
+        return carePersonRepository.countActiveByGroupIds(groupIds).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
     }
 
     private SupportGroup getOwnedGroup(Long groupId) {
