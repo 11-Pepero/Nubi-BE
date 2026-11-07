@@ -5,6 +5,10 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   datasource:
     driver-class-name: org.postgresql.Driver
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 30MB
   jpa:
     open-in-view: false
 
@@ -13,6 +17,9 @@ jwt:
     expire-time: ${JWT_ACCESS_TOKEN_EXPIRE_TIME:3600000}
   refresh-token:
     expire-time: ${JWT_REFRESH_TOKEN_EXPIRE_TIME:604800000}
+
+file:
+  upload-dir: ${FILE_UPLOAD_DIR:uploads}
 
 springdoc:
   swagger-ui:
