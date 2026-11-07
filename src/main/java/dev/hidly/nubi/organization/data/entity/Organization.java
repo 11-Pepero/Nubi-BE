@@ -51,11 +51,12 @@ public class Organization extends BaseTimeEntity {
     private LocalDateTime deletedAt;
 
     @Builder
-    private Organization(String name, OrganizationType type, District district, String address, String phone) {
+    private Organization(String name, OrganizationType type, District district, String address, Point location, String phone) {
         this.name = name;
         this.type = type;
         this.district = district;
         this.address = address;
+        this.location = location;
         this.phone = phone;
     }
 

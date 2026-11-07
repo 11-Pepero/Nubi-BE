@@ -211,4 +211,43 @@ class AuthApiTest {
         Organization organization = organizationRepository.findById(organizationId.longValue()).orElseThrow();
         assertThat(organization.getDistrict()).isNull();
     }
+
+    @Test
+    void 연락처와_좌표를_보내면_기관에_저장된다() throws Exception {
+        String body = """
+                {"orgName":"용인 주간활동센터","type":"DAY_CARE","address":"경기 용인시 수지구 포은대로 435","email":"%s","password":"%s",
+                 "phone":"031-324-2000","latitude":37.3222,"longitude":127.0978}
+                """.formatted(uniqueEmail(), PASSWORD);
+
+        String response = mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Number organizationId = JsonPath.read(response, "$.data.organizationId");
+
+        Organization organization = organizationRepository.findById(organizationId.longValue()).orElseThrow();
+        assertThat(organization.getPhone()).isEqualTo("031-324-2000");
+        assertThat(organization.getDistrict()).isEqualTo(District.SUJI);
+        assertThat(organization.getLocation().getY()).isEqualTo(37.3222);
+        assertThat(organization.getLocation().getX()).isEqualTo(127.0978);
+    }
+
+    @Test
+    void 좌표를_하나만_보내면_400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signUpBody(uniqueEmail()).replace("}", ",\"latitude\":37.3}")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void 좌표_범위를_벗어나면_400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signUpBody(uniqueEmail()).replace("}", ",\"latitude\":137.3,\"longitude\":127.1}")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+    }
 }

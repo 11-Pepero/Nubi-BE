@@ -7,6 +7,7 @@ import dev.hidly.nubi.auth.data.dto.response.TokenResponseDto;
 import dev.hidly.nubi.auth.data.exception.EmailDuplicationException;
 import dev.hidly.nubi.auth.data.exception.InvalidCredentialsException;
 import dev.hidly.nubi.auth.data.exception.MemberNotFoundException;
+import dev.hidly.nubi.common.geo.GeoPoints;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.security.AuthenticationToken;
 import dev.hidly.nubi.common.security.JwtTokenProvider;
@@ -51,6 +52,8 @@ public class AuthService {
                 .type(request.getType())
                 .address(address)
                 .district(District.fromAddress(address).orElse(null))
+                .phone(trimToNull(request.getPhone()))
+                .location(request.hasLocation() ? GeoPoints.of(request.getLatitude(), request.getLongitude()) : null)
                 .build());
 
         Member member;
@@ -130,6 +133,13 @@ public class AuthService {
                 member.getRole().getAuthority());
         AuthenticationToken token = tokenProvider.generateToken(loginMember);
         return TokenResponseDto.of(member, token);
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private String normalizeEmail(String email) {
