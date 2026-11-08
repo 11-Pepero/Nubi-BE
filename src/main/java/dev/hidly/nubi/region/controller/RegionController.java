@@ -1,0 +1,32 @@
+package dev.hidly.nubi.region.controller;
+
+import dev.hidly.nubi.common.response.GlobalResponse;
+import dev.hidly.nubi.region.data.dto.response.DistrictStatsResponseDto;
+import dev.hidly.nubi.region.service.RegionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.YearMonth;
+
+@Tag(name = "지도", description = "참여 사각지대 지도")
+@RestController
+@RequestMapping("/api/v1/regions")
+@RequiredArgsConstructor
+public class RegionController {
+    private final RegionService regionService;
+
+    @GetMapping("/districts")
+    @Operation(summary = "구별 사각지대", description = "구마다 장애인복지시설 수, 등록장애인 수, 1천 명당 시설 수, 그 달에 열리는 프로그램 수(공개 중·마감), "
+            + "접근성 편의시설이 확인된 장소의 프로그램 수, 시설 한 곳당 프로그램 수를 줍니다. month는 yyyy-MM이고 없으면 이번 달입니다. "
+            + "시설 한 곳당 프로그램 수가 적을수록 지도에서 짙게 칠합니다.")
+    public GlobalResponse<DistrictStatsResponseDto> getDistricts(
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month) {
+        return regionService.getDistricts(month);
+    }
+}
