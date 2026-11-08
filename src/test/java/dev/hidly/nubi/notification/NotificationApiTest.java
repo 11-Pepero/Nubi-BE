@@ -10,13 +10,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -100,6 +104,37 @@ class NotificationApiTest {
         mockMvc.perform(patch("/api/v1/notifications/{id}/read", notificationId).header("Authorization", "Bearer " + other.accessToken()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOTIFICATION_NOT_FOUND"));
+    }
+
+    @Test
+    void 구독하면_새_알림이_실시간으로_온다() throws Exception {
+        Login me = signUp();
+        Login other = signUp();
+
+        MvcResult byHeader = mockMvc.perform(get("/api/v1/notifications/stream").header("Authorization", "Bearer " + me.accessToken()))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        MvcResult byQuery = mockMvc.perform(get("/api/v1/notifications/stream").param("token", me.accessToken()))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        MvcResult otherOrg = mockMvc.perform(get("/api/v1/notifications/stream").param("token", other.accessToken()))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        notify(me.organizationId(), "실시간 알림");
+
+        assertThat(byHeader.getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .contains("event:connect").contains("event:notification").contains("실시간 알림");
+        assertThat(byQuery.getResponse().getContentAsString(StandardCharsets.UTF_8)).contains("실시간 알림");
+        assertThat(otherOrg.getResponse().getContentAsString(StandardCharsets.UTF_8)).contains("event:connect").doesNotContain("실시간 알림");
+    }
+
+    @Test
+    void 토큰_없이_구독하면_401() throws Exception {
+        mockMvc.perform(get("/api/v1/notifications/stream"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/notifications").param("token", signUp().accessToken()))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

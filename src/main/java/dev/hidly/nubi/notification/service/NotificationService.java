@@ -16,6 +16,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDateTime;
 
@@ -26,15 +29,16 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final OrganizationRepository organizationRepository;
+    private final NotificationEmitters notificationEmitters;
 
     /**
-     * 다른 도메인에서 알림을 만들 때 부르는 메서드입니다.
+     * 다른 도메인에서 알림을 만들 때 부르는 메서드입니다. 저장이 커밋되면 구독 중인 화면에 실시간으로 보냅니다.
      * 예: notificationService.notify(hostOrgId, NotificationType.NEW_APPLICATION, "새 신청이 들어왔어요", "...", NotificationTargetType.APPLICATION, applicationId)
      */
     @Transactional
     public void notify(Long organizationId, NotificationType type, String title, String body,
                        NotificationTargetType targetType, Long targetId) {
-        notificationRepository.save(Notification.builder()
+        Notification notification = notificationRepository.save(Notification.builder()
                 .organization(organizationRepository.getReferenceById(organizationId))
                 .type(type)
                 .title(title)
@@ -42,6 +46,17 @@ public class NotificationService {
                 .targetType(targetType)
                 .targetId(targetId)
                 .build());
+        NotificationResponseDto payload = NotificationResponseDto.from(notification);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                notificationEmitters.send(organizationId, payload);
+            }
+        });
+    }
+
+    public SseEmitter subscribe() {
+        return notificationEmitters.connect(SecurityUtil.getOrganizationId());
     }
 
     @Transactional(readOnly = true)

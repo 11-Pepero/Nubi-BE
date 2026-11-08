@@ -10,7 +10,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Tag(name = "알림", description = "알림 목록, 실시간 알림")
 @RestController
@@ -18,6 +20,13 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class NotificationController {
     private final NotificationService notificationService;
+
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "실시간 알림 구독", description = "SSE로 연결을 열어 둡니다. 연결 직후 connect 이벤트, 새 알림마다 notification 이벤트(알림 목록 항목과 같은 모양)를 보냅니다. "
+            + "토큰은 Authorization 헤더 또는 ?token= 쿼리로 보냅니다(브라우저 기본 EventSource는 헤더를 못 붙여서 이 주소만 쿼리 허용). 30분 뒤 끊기면 다시 연결하세요. 공통 응답 포맷을 쓰지 않습니다.")
+    public SseEmitter subscribe() {
+        return notificationService.subscribe();
+    }
 
     @GetMapping
     @Operation(summary = "알림 목록", description = "로그인 기관이 받은 알림을 최신순으로 조회합니다.")
