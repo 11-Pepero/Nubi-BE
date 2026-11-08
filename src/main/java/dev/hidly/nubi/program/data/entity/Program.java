@@ -13,7 +13,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-// ponytail: raw_notice_id 연관관계는 RawNotice 엔티티가 생길 때 추가
 @Getter
 @Entity
 @Table(name = "program")
@@ -26,6 +25,10 @@ public class Program extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "host_organization_id")
     private Organization hostOrganization;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "raw_notice_id")
+    private RawNotice rawNotice;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "venue_id")
@@ -69,11 +72,12 @@ public class Program extends BaseTimeEntity {
     private LocalDateTime deletedAt;
 
     @Builder
-    private Program(Organization hostOrganization, Venue venue, String hostName, String title, ProgramCategory category,
+    private Program(Organization hostOrganization, RawNotice rawNotice, Venue venue, String hostName, String title, ProgramCategory category,
                     String description, LocalDateTime startAt, LocalDateTime endAt, Integer capacity,
                     ApplyMethod applyMethod, String applyUrl, String contactPhone, LocalDateTime deadlineAt,
                     ProgramStatus status) {
         this.hostOrganization = hostOrganization;
+        this.rawNotice = rawNotice;
         this.venue = venue;
         this.hostName = hostName;
         this.title = title;
@@ -107,6 +111,10 @@ public class Program extends BaseTimeEntity {
                 .deadlineAt(deadlineAt)
                 .status(status)
                 .build();
+    }
+
+    public void end() {
+        this.status = ProgramStatus.ENDED;
     }
 
     public boolean isDeleted() {

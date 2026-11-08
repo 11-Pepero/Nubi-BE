@@ -1,5 +1,6 @@
 package dev.hidly.nubi;
 
+import dev.hidly.nubi.collect.LegacyTlsSupport;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -10,6 +11,7 @@ public class NubiApplication {
 
     public static void main(String[] args) {
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"));
+        LegacyTlsSupport.applyIfEnabled();
         SpringApplication.run(NubiApplication.class, args);
     }
 

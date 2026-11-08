@@ -42,3 +42,6 @@ out/
 
 ### uploads ###
 uploads/
+
+### local secrets ###
+local-secret.properties
