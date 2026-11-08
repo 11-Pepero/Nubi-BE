@@ -83,7 +83,8 @@ public class CarePersonService {
 
     @Transactional(readOnly = true)
     public GlobalResponse<CarePersonResponseDto> getCarePerson(Long careId) {
-        return GlobalResponse.ok(CarePersonResponseDto.from(getOwnedCarePerson(careId)));
+        CarePerson carePerson = getOwnedCarePerson(careId);
+        return GlobalResponse.ok(CarePersonResponseDto.of(carePerson, eligibilityService.impactOf(carePerson)));
     }
 
     @Transactional
