@@ -1,6 +1,11 @@
 package dev.hidly.nubi.program.service;
 
+import dev.hidly.nubi.application.data.enums.ApplicationStatus;
+import dev.hidly.nubi.application.data.repository.ApplicationRepository;
 import dev.hidly.nubi.application.data.repository.EventApplicationStats;
+import dev.hidly.nubi.program.data.dto.response.EventDashboardResponseDto;
+import java.time.LocalDateTime;
+import java.time.YearMonth;
 import dev.hidly.nubi.application.service.EventApplicationService;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.response.PageResponse;
@@ -58,6 +63,7 @@ public class EventService {
     private final SupportTagRepository supportTagRepository;
     private final VenueService venueService;
     private final EventApplicationService eventApplicationService;
+    private final ApplicationRepository applicationRepository;
 
     @Transactional
     public GlobalResponse<ProgramDetailResponseDto> create(EventCreateRequestDto request) {
@@ -104,6 +110,22 @@ public class EventService {
         return GlobalResponse.ok(PageResponse.from(events.map(event -> EventSummaryResponseDto.of(event,
                 thumbnails.get(event.getId()),
                 stats.getOrDefault(event.getId(), EventApplicationStats.empty(event.getId()))))));
+    }
+
+    @Transactional(readOnly = true)
+    public GlobalResponse<EventDashboardResponseDto> getDashboard() {
+        Long organizationId = SecurityUtil.getOrganizationId();
+        long ongoing = programRepository.count(hostedBy(organizationId, List.of(ProgramStatus.OPEN, ProgramStatus.CLOSED)));
+        long past = programRepository.count(hostedBy(organizationId, List.of(ProgramStatus.ENDED)));
+        long draft = programRepository.count(hostedBy(organizationId, List.of(ProgramStatus.DRAFT)));
+        long newApplications = applicationRepository.countForHostByStatus(organizationId, ApplicationStatus.SUBMITTED);
+
+        LocalDateTime monthStart = YearMonth.now().atDay(1).atStartOfDay();
+        Object[] people = applicationRepository.sumPeopleForHostStartingBetween(organizationId,
+                ApplicationStatus.CONFIRMED, monthStart, monthStart.plusMonths(1)).getFirst();
+
+        return GlobalResponse.ok(new EventDashboardResponseDto(ongoing, past, draft, newApplications,
+                ((Number) people[0]).longValue(), ((Number) people[1]).longValue()));
     }
 
     private void validate(EventCreateRequestDto request) {
