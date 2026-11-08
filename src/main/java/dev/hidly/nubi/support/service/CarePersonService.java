@@ -3,6 +3,7 @@ package dev.hidly.nubi.support.service;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.organization.data.repository.OrganizationRepository;
+import dev.hidly.nubi.program.service.EligibilityService;
 import dev.hidly.nubi.support.data.dto.request.CareItemRequestDto;
 import dev.hidly.nubi.support.data.dto.request.CarePersonCreateRequestDto;
 import dev.hidly.nubi.support.data.dto.request.CarePersonRequest;
@@ -42,6 +43,7 @@ public class CarePersonService {
     private final SupportGroupRepository supportGroupRepository;
     private final SupportTagRepository supportTagRepository;
     private final OrganizationRepository organizationRepository;
+    private final EligibilityService eligibilityService;
 
     @Transactional(readOnly = true)
     public GlobalResponse<List<CarePersonResponseDto>> getCarePersons(Long groupId, String keyword, SupportCategory category) {
@@ -73,6 +75,7 @@ public class CarePersonService {
         toCareItems(request).forEach(carePerson::addItem);
 
         carePersonRepository.save(carePerson);
+        recomputeGroup(carePerson);
         log.info("[createCarePerson] 개별 케어 추가: organizationId={}, careId={}", organizationId, carePerson.getId());
 
         return GlobalResponse.ok(CarePersonResponseDto.from(carePerson));
@@ -90,6 +93,7 @@ public class CarePersonService {
         carePerson.update(request.getAlias().trim(), trimToNull(request.getMemo()), request.applyToJudgementOrDefault());
         carePerson.replaceItems(toCareItems(request));
         carePersonRepository.flush();
+        recomputeGroup(carePerson);
         log.info("[updateCarePerson] 개별 케어 수정: careId={}", careId);
 
         return GlobalResponse.ok(CarePersonResponseDto.from(carePerson));
@@ -97,9 +101,18 @@ public class CarePersonService {
 
     @Transactional
     public GlobalResponse<Void> deleteCarePerson(Long careId) {
-        getOwnedCarePerson(careId).delete();
+        CarePerson carePerson = getOwnedCarePerson(careId);
+        carePerson.delete();
+        carePersonRepository.flush();
+        recomputeGroup(carePerson);
         log.info("[deleteCarePerson] 개별 케어 삭제: careId={}", careId);
         return GlobalResponse.ok();
+    }
+
+    private void recomputeGroup(CarePerson carePerson) {
+        if (carePerson.getGroup() != null) {
+            eligibilityService.recompute(carePerson.getGroup());
+        }
     }
 
     private CarePerson getOwnedCarePerson(Long careId) {

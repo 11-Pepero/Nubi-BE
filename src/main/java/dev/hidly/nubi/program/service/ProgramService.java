@@ -4,6 +4,7 @@ import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.program.data.dto.request.ProgramSearchCondition;
+import dev.hidly.nubi.program.data.dto.response.EligibilityResponseDto;
 import dev.hidly.nubi.program.data.dto.response.FacilityResponseDto;
 import dev.hidly.nubi.program.data.dto.response.ProgramDetailResponseDto;
 import dev.hidly.nubi.program.data.dto.response.ProgramImageResponseDto;
@@ -34,6 +35,7 @@ public class ProgramService {
     private final ProgramRepository programRepository;
     private final ProgramImageRepository programImageRepository;
     private final VenueService venueService;
+    private final EligibilityService eligibilityService;
 
     @Transactional(readOnly = true)
     public GlobalResponse<PageResponse<ProgramSummaryResponseDto>> search(ProgramSearchCondition condition, int page, int size) {
@@ -50,7 +52,7 @@ public class ProgramService {
     }
 
     @Transactional(readOnly = true)
-    public GlobalResponse<ProgramDetailResponseDto> getDetail(Long programId) {
+    public GlobalResponse<ProgramDetailResponseDto> getDetail(Long programId, Long groupId) {
         Program program = programRepository.findWithVenueById(programId)
                 .filter(p -> !p.isDeleted())
                 .filter(this::isVisible)
@@ -63,7 +65,9 @@ public class ProgramService {
         List<FacilityResponseDto> facilities = program.getVenue() == null ? List.of()
                 : venueService.mergeFacilities(program.getVenue().getId());
 
-        return GlobalResponse.ok(ProgramDetailResponseDto.of(program, images, facilities));
+        EligibilityResponseDto eligibility = groupId == null ? null : eligibilityService.judgeProgram(program, groupId);
+
+        return GlobalResponse.ok(ProgramDetailResponseDto.of(program, images, facilities, eligibility));
     }
 
     private boolean isVisible(Program program) {
