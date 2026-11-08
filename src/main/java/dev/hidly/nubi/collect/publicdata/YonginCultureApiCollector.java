@@ -113,7 +113,7 @@ public class YonginCultureApiCollector implements NoticeCollector {
     }
 
     private static String summarize(RuntimeException e) {
-        String message = String.valueOf(e.getMessage()).replaceAll("\\s+", " ");
+        String message = String.valueOf(e.getMessage()).replaceAll("serviceKey=[^&\"\\s]*", "serviceKey=***").replaceAll("\\s+", " ");
         return message.length() > 200 ? message.substring(0, 200) + "..." : message;
     }
 }

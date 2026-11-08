@@ -10,9 +10,12 @@ spring:
   servlet:
     multipart:
       max-file-size: 5MB
-      max-request-size: 30MB
+      max-request-size: 55MB
   jpa:
     open-in-view: false
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
 
 jwt:
   access-token:

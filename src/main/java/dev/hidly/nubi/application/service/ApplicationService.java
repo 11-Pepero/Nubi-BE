@@ -65,7 +65,7 @@ public class ApplicationService {
     @Transactional
     public GlobalResponse<ApplicationResponseDto> applyDirect(Long programId, DirectApplicationRequestDto request) {
         Long organizationId = SecurityUtil.getOrganizationId();
-        Program program = programRepository.findById(programId)
+        Program program = programRepository.findLockedById(programId)
                 .filter(p -> !p.isDeleted())
                 .orElseThrow(ProgramNotFoundException::new);
         validateDirectApplicable(program, organizationId);
@@ -79,7 +79,7 @@ public class ApplicationService {
             throw new ApplicationDuplicatedException();
         }
         if (program.getCapacity() != null) {
-            long taken = applicationRepository.sumParticipantsExcept(programId, ApplicationStatus.RELEASED);
+            long taken = applicationRepository.sumParticipantsExcept(programId, ApplicationStatus.NOT_HOLDING_SEAT);
             if (taken + participantCount > program.getCapacity()) {
                 throw new CapacityExceededException();
             }

@@ -2,7 +2,6 @@ package dev.hidly.nubi.program;
 
 import com.jayway.jsonpath.JsonPath;
 import dev.hidly.nubi.organization.data.enums.District;
-import dev.hidly.nubi.program.data.entity.Eligibility;
 import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.entity.ProgramCondition;
 import dev.hidly.nubi.program.data.entity.Venue;
@@ -46,9 +45,9 @@ class EligibilityApiTest {
     @Autowired
     private VenueFacilityRepository venueFacilityRepository;
     @Autowired
-    private EligibilityRepository eligibilityRepository;
-    @Autowired
     private SupportTagRepository supportTagRepository;
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     private record Login(String accessToken, Long organizationId) {
     }
@@ -345,11 +344,12 @@ class EligibilityApiTest {
     }
 
     @Test
-    void 그룹을_만들거나_고치면_판정을_다시_계산해_저장한다() throws Exception {
+    void 그룹을_고치면_다음_조회부터_바뀐_판정이_나온다() throws Exception {
         long groupId = wheelchairAndEasyWordsGroup();
-        Program program = createProgram("저장 확인");
+        Program program = createProgram("수정 후 판정");
         condition(program, wheelchair, ConditionStatus.NOT_PROVIDED, ConditionSource.HOST, null);
         condition(program, easyWords, ConditionStatus.PROVIDED, ConditionSource.HOST, null);
+        eligibility(program.getId(), groupId).andExpect(jsonPath("$.data.result").value("NOT"));
 
         mockMvc.perform(put("/api/v1/groups/{groupId}", groupId)
                         .header("Authorization", "Bearer " + login.accessToken())
@@ -359,13 +359,24 @@ class EligibilityApiTest {
                                 """.formatted(easyWords.getId())))
                 .andExpect(status().isOk());
 
-        Eligibility saved = eligibilityRepository.findAllByGroupId(groupId).stream()
-                .filter(eligibility -> eligibility.getProgram().getId().equals(program.getId()))
-                .findFirst().orElseThrow();
-        assertThat(saved.getResult()).isEqualTo(EligibilityResult.ELIGIBLE);
-        assertThat(saved.getReasons().items()).hasSize(1);
-        assertThat(saved.getReasons().items().getFirst().code()).isEqualTo("EASY_WORDS");
-        assertThat(saved.getComputedAt()).isNotNull();
+        eligibility(program.getId(), groupId)
+                .andExpect(jsonPath("$.data.result").value("ELIGIBLE"))
+                .andExpect(jsonPath("$.data.reasons.items.length()").value(1));
+    }
+
+    @Test
+    void 남은_정원이_그룹_인원보다_적으면_어려움() throws Exception {
+        long groupId = wheelchairAndEasyWordsGroup();
+        Program program = createProgram("남은 자리 부족", null, 10);
+        provideAll(program);
+        jdbcTemplate.update("""
+                insert into application (program_id, applicant_org_id, participant_count, companion_count, status, created_at, updated_at)
+                values (?, ?, 5, 0, 'CONFIRMED', now(), now())
+                """, program.getId(), login.organizationId());
+
+        eligibility(program.getId(), groupId)
+                .andExpect(jsonPath("$.data.result").value("NOT"))
+                .andExpect(jsonPath("$.data.reasons.capacityExceeded").value(true));
     }
 
     @Test
@@ -441,7 +452,7 @@ class EligibilityApiTest {
         long groupId = createGroup(login.accessToken(), 6, """
                 [{"supportTagId":%d}]
                 """.formatted(signLanguage.getId()));
-        LocalDateTime earliest = LocalDateTime.of(2000, 1, 1, 0, 0).minusSeconds(System.currentTimeMillis() / 1000);
+        LocalDateTime earliest = LocalDateTime.of(2200, 1, 1, 0, 0).minusSeconds(System.currentTimeMillis() / 1000);
         Program affected = programRepository.save(Program.builder().title("수어 제공, 충전 불가")
                 .startAt(earliest).status(ProgramStatus.OPEN).build());
         condition(affected, signLanguage, ConditionStatus.PROVIDED, ConditionSource.HOST, null);

@@ -115,21 +115,35 @@ class NoticeCollectServiceTest {
     }
 
     @Test
-    void 끝난_수집_공고만_종료로_바꾸고_기관_행사는_건드리지_않는다() {
-        LocalDateTime start = LocalDateTime.now().plusMinutes(1);
-        NoticeData soon = notice("곧 끝남", start.minusHours(2), start.minusSeconds(1).plusSeconds(1), "종료홀", null);
-        noticeCollectService.collect(List.of(new FakeCollector(List.of(soon))));
-        Program hostEvent = programRepository.save(Program.builder().title("기관 행사").status(ProgramStatus.OPEN)
-                .startAt(start.minusDays(2)).endAt(start.minusDays(1)).build());
+    void 수집이_끝나면_끝난_행사는_종료로_마감이_지난_행사는_마감으로_바꾼다() {
+        LocalDateTime now = LocalDateTime.now();
+        Program finished = programRepository.save(Program.builder().title("끝난 기관 행사").status(ProgramStatus.OPEN)
+                .startAt(now.minusDays(2)).endAt(now.minusDays(1)).build());
+        Program pastDeadline = programRepository.save(Program.builder().title("마감 지난 기관 행사").status(ProgramStatus.OPEN)
+                .startAt(now.plusDays(5)).deadlineAt(now.minusHours(1)).build());
+        Program upcoming = programRepository.save(Program.builder().title("다가올 기관 행사").status(ProgramStatus.OPEN)
+                .startAt(now.plusDays(5)).deadlineAt(now.plusDays(3)).build());
 
-        transactionTemplate.executeWithoutResult(status -> programRepository.findById(programOf(soon.externalId()).getId())
-                .ifPresent(p -> assertThat(p.getStatus()).isEqualTo(ProgramStatus.OPEN)));
+        noticeCollectService.collect(List.of(new FakeCollector(List.of())));
 
-        NoticeData pastNotice = notice("이미 끝남", start.minusDays(3), start.minusDays(2), "종료홀", null);
-        noticeCollectService.collect(List.of(new FakeCollector(List.of(pastNotice))));
+        assertThat(programRepository.findById(finished.getId()).orElseThrow().getStatus()).isEqualTo(ProgramStatus.ENDED);
+        assertThat(programRepository.findById(pastDeadline.getId()).orElseThrow().getStatus()).isEqualTo(ProgramStatus.CLOSED);
+        assertThat(programRepository.findById(upcoming.getId()).orElseThrow().getStatus()).isEqualTo(ProgramStatus.OPEN);
+    }
 
-        assertThat(programOf(pastNotice.externalId()).getStatus()).isEqualTo(ProgramStatus.ENDED);
-        assertThat(programRepository.findById(hostEvent.getId()).orElseThrow().getStatus()).isEqualTo(ProgramStatus.OPEN);
+    @Test
+    void 저장에_실패한_공고만_건너뛰고_나머지는_저장한다() {
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        NoticeData broken = new NoticeData("TEST", "TEST-" + UUID.randomUUID().toString().substring(0, 20), Map.of(),
+                null, ProgramCategory.CULTURE, start, start.plusHours(1), "실패홀", null, null, null, null);
+        NoticeData ok = notice("정상 저장", start, start.plusHours(1), "긴주소홀" + UUID.randomUUID().toString().substring(0, 8),
+                "경기도 용인시 처인구 " + "가".repeat(300));
+
+        Map<String, Integer> result = noticeCollectService.collect(List.of(new FakeCollector(List.of(broken, ok))));
+
+        assertThat(result).containsEntry("TEST", 1);
+        assertThat(rawNoticeRepository.existsByExternalId(broken.externalId())).isFalse();
+        assertThat(programOf(ok.externalId()).getVenue().getAddress()).hasSize(200);
     }
 
     @Test

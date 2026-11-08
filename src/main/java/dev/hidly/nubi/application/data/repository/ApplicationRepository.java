@@ -25,6 +25,30 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     long sumParticipantsExcept(@Param("programId") Long programId,
                                @Param("released") Collection<ApplicationStatus> released);
 
+    @Query("""
+            select coalesce(sum(a.participantCount), 0) from Application a
+            where a.program.id = :programId and a.status not in :released and a.id <> :applicationId
+            """)
+    long sumParticipantsExceptApplication(@Param("programId") Long programId,
+                                          @Param("released") Collection<ApplicationStatus> released,
+                                          @Param("applicationId") Long applicationId);
+
+    @Query("""
+            select a.program.id, coalesce(sum(a.participantCount), 0) from Application a
+            where a.program.id in :programIds and a.status not in :released
+            group by a.program.id
+            """)
+    List<Object[]> sumParticipantsByProgramIds(@Param("programIds") Collection<Long> programIds,
+                                               @Param("released") Collection<ApplicationStatus> released);
+
+    @Query("""
+            select count(a) from Application a
+            where a.applicantOrganization.id = :organizationId and a.status = :status and a.program.startAt >= :from
+            """)
+    long countByApplicantAndStatusStartingAfter(@Param("organizationId") Long organizationId,
+                                                @Param("status") ApplicationStatus status,
+                                                @Param("from") LocalDateTime from);
+
     @EntityGraph(attributePaths = {"applicantOrganization", "group"})
     Page<Application> findByProgramId(Long programId, Pageable pageable);
 

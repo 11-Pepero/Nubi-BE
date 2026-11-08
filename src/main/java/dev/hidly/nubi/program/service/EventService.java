@@ -41,6 +41,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -133,6 +134,12 @@ public class EventService {
             throw new InvalidEventRequestException();
         }
         if (request.getEndAt() != null && request.getEndAt().isBefore(request.getStartAt())) {
+            throw new InvalidEventRequestException();
+        }
+        if (request.getDeadlineAt() != null && request.getDeadlineAt().isAfter(request.getStartAt())) {
+            throw new InvalidEventRequestException();
+        }
+        if (request.getStatus() == ProgramStatus.OPEN && !request.getStartAt().isAfter(LocalDateTime.now())) {
             throw new InvalidEventRequestException();
         }
         Set<Long> seen = new HashSet<>();

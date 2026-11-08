@@ -32,7 +32,8 @@ public class EligibilityJudge {
             "NO_STAIRS", STEP_FREE_FACILITIES,
             "ACCESSIBLE_TOILET", List.of(FacilityType.ACCESSIBLE_TOILET));
 
-    public record ProgramFacts(Program program, List<ProgramCondition> conditions, Map<FacilityType, FacilityStatus> facilities) {
+    public record ProgramFacts(Program program, List<ProgramCondition> conditions, Map<FacilityType, FacilityStatus> facilities,
+                               long takenSeats) {
     }
 
     public record Judgement(EligibilityResult result, EligibilityReasons reasons) {
@@ -40,7 +41,7 @@ public class EligibilityJudge {
 
     public Judgement judge(SupportGroup group, List<CarePerson> carePersons, ProgramFacts facts) {
         Integer capacity = facts.program().getCapacity();
-        boolean capacityExceeded = capacity != null && group.getMemberCount() > capacity;
+        boolean capacityExceeded = capacity != null && facts.takenSeats() + group.getMemberCount() > capacity;
 
         List<EligibilityReasons.Item> items = group.getSupports().stream()
                 .map(support -> toItem(support, evaluate(support.getSupportTag(), facts)))

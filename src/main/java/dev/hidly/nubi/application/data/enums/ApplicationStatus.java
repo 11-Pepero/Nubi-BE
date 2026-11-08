@@ -18,6 +18,8 @@ public enum ApplicationStatus {
     // 정원을 차지하지 않는 상태
     public static final Set<ApplicationStatus> RELEASED = Set.of(REJECTED, CANCELLED);
 
+    public static final Set<ApplicationStatus> NOT_HOLDING_SEAT = Set.of(REJECTED, CANCELLED, WAITING);
+
     // 주최 기관이 확정·대기·거절을 정할 수 있는 지금 상태와 바꿀 수 있는 상태 (API-45)
     public static final Set<ApplicationStatus> HOST_DECIDABLE_FROM = Set.of(SUBMITTED, INQUIRY, WAITING, CONFIRMED);
     public static final Set<ApplicationStatus> HOST_DECISIONS = Set.of(CONFIRMED, WAITING, REJECTED);

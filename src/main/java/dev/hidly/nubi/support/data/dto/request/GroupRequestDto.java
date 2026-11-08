@@ -28,7 +28,7 @@ public class GroupRequestDto {
     private Integer memberCount;
 
     @Valid
-    private List<GroupSupportRequestDto> supports;
+    private List<@NotNull @Valid GroupSupportRequestDto> supports;
 
     public List<GroupSupportRequestDto> supportsOrEmpty() {
         return supports == null ? List.of() : supports;

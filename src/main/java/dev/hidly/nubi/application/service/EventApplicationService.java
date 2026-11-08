@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import dev.hidly.nubi.application.data.enums.ApplicationStatus;
 import dev.hidly.nubi.application.data.exception.ApplicationNotFoundException;
+import dev.hidly.nubi.application.data.exception.CapacityExceededException;
 import dev.hidly.nubi.application.data.repository.ApplicationRepository;
 import dev.hidly.nubi.application.data.repository.EventApplicationStats;
 import dev.hidly.nubi.common.response.GlobalResponse;
@@ -91,6 +92,9 @@ public class EventApplicationService {
         Application application = getApplicationOf(eventId, applicationId);
         ApplicationStatus before = application.getStatus();
 
+        if (request.getStatus() == ApplicationStatus.CONFIRMED && before != ApplicationStatus.CONFIRMED) {
+            checkCapacityForConfirm(application);
+        }
         application.decideByHost(request.getStatus());
         if (request.getReason() != null && !request.getReason().isBlank()) {
             application.addMessage(ApplicationMessage.builder()
@@ -194,6 +198,19 @@ public class EventApplicationService {
         }
         return applicationRepository.statsByProgramIds(eventIds, ApplicationStatus.RELEASED).stream()
                 .collect(Collectors.toMap(EventApplicationStats::programId, stats -> stats));
+    }
+
+    private void checkCapacityForConfirm(Application application) {
+        Program locked = programRepository.findLockedById(application.getProgram().getId())
+                .orElseThrow(ProgramNotFoundException::new);
+        if (locked.getCapacity() == null) {
+            return;
+        }
+        long others = applicationRepository.sumParticipantsExceptApplication(locked.getId(),
+                ApplicationStatus.NOT_HOLDING_SEAT, application.getId());
+        if (others + application.getParticipantCount() > locked.getCapacity()) {
+            throw new CapacityExceededException();
+        }
     }
 
     private Program getHostedEvent(Long eventId) {
