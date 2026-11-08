@@ -37,23 +37,32 @@ public class KakaoLocalClient {
         }
         try {
             Map<String, Object> response = collectRestClient.get()
-                    .uri(UriComponentsBuilder.fromUriString(KEYWORD_URL).queryParam("query", query).queryParam("size", 1)
+                    .uri(UriComponentsBuilder.fromUriString(KEYWORD_URL).queryParam("query", query).queryParam("size", 5)
                             .encode().build().toUri())
                     .header("Authorization", "KakaoAK " + restApiKey.trim())
                     .retrieve()
                     .body(new ParameterizedTypeReference<>() {
                     });
             Object documents = response == null ? null : response.get("documents");
-            if (documents instanceof List<?> list && !list.isEmpty() && list.getFirst() instanceof Map<?, ?> first) {
-                String road = (String) first.get("road_address_name");
-                String address = road == null || road.isBlank() ? (String) first.get("address_name") : road;
-                return Optional.of(new Place((String) first.get("place_name"), address,
-                        Double.parseDouble(String.valueOf(first.get("y"))), Double.parseDouble(String.valueOf(first.get("x")))));
+            if (documents instanceof List<?> list) {
+                return list.stream()
+                        .filter(Map.class::isInstance)
+                        .map(Map.class::cast)
+                        .filter(document -> !String.valueOf(document.get("place_name")).contains("주차장"))
+                        .findFirst()
+                        .map(KakaoLocalClient::toPlace);
             }
         } catch (RuntimeException e) {
             log.warn("[KakaoLocalClient] 장소 검색 실패: {} ({})", query, summarize(e));
         }
         return Optional.empty();
+    }
+
+    private static Place toPlace(Map<?, ?> document) {
+        String road = (String) document.get("road_address_name");
+        String address = road == null || road.isBlank() ? (String) document.get("address_name") : road;
+        return new Place((String) document.get("place_name"), address,
+                Double.parseDouble(String.valueOf(document.get("y"))), Double.parseDouble(String.valueOf(document.get("x"))));
     }
 
     private static String summarize(RuntimeException e) {
