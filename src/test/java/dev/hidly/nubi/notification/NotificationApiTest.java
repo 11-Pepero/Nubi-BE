@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -74,5 +75,30 @@ class NotificationApiTest {
         mockMvc.perform(get("/api/v1/notifications/unread-count").header("Authorization", "Bearer " + me.accessToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.unreadCount").value(2));
+    }
+
+    private Number firstNotificationId(Login login) throws Exception {
+        String list = mockMvc.perform(get("/api/v1/notifications").header("Authorization", "Bearer " + login.accessToken()))
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(list, "$.data.content[0].notificationId");
+    }
+
+    @Test
+    void 알림을_읽으면_안_읽은_수가_줄고_남의_알림은_못_읽는다() throws Exception {
+        Login me = signUp();
+        Login other = signUp();
+        notify(me.organizationId(), "알림 1");
+        notify(me.organizationId(), "알림 2");
+        Number notificationId = firstNotificationId(me);
+
+        mockMvc.perform(patch("/api/v1/notifications/{id}/read", notificationId).header("Authorization", "Bearer " + me.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.read").value(true));
+        mockMvc.perform(get("/api/v1/notifications/unread-count").header("Authorization", "Bearer " + me.accessToken()))
+                .andExpect(jsonPath("$.data.unreadCount").value(1));
+
+        mockMvc.perform(patch("/api/v1/notifications/{id}/read", notificationId).header("Authorization", "Bearer " + other.accessToken()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("NOTIFICATION_NOT_FOUND"));
     }
 }

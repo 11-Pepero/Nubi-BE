@@ -57,4 +57,10 @@ public class Notification extends BaseTimeEntity {
     public boolean isRead() {
         return readAt != null;
     }
+
+    public void read() {
+        if (readAt == null) {
+            readAt = LocalDateTime.now();
+        }
+    }
 }

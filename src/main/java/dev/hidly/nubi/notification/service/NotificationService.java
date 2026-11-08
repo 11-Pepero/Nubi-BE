@@ -7,6 +7,7 @@ import dev.hidly.nubi.notification.data.dto.response.NotificationResponseDto;
 import dev.hidly.nubi.notification.data.dto.response.UnreadCountResponseDto;
 import dev.hidly.nubi.notification.data.entity.Notification;
 import dev.hidly.nubi.notification.data.enums.NotificationTargetType;
+import dev.hidly.nubi.notification.data.exception.NotificationNotFoundException;
 import dev.hidly.nubi.notification.data.enums.NotificationType;
 import dev.hidly.nubi.notification.data.repository.NotificationRepository;
 import dev.hidly.nubi.organization.data.repository.OrganizationRepository;
@@ -53,5 +54,14 @@ public class NotificationService {
     public GlobalResponse<UnreadCountResponseDto> getUnreadCount() {
         return GlobalResponse.ok(new UnreadCountResponseDto(
                 notificationRepository.countByOrganizationIdAndReadAtIsNull(SecurityUtil.getOrganizationId())));
+    }
+
+    @Transactional
+    public GlobalResponse<NotificationResponseDto> read(Long notificationId) {
+        Notification notification = notificationRepository
+                .findByIdAndOrganizationId(notificationId, SecurityUtil.getOrganizationId())
+                .orElseThrow(NotificationNotFoundException::new);
+        notification.read();
+        return GlobalResponse.ok(NotificationResponseDto.from(notification));
     }
 }

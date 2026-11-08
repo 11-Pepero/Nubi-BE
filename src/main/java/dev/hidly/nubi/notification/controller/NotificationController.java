@@ -32,4 +32,10 @@ public class NotificationController {
     public GlobalResponse<UnreadCountResponseDto> getUnreadCount() {
         return notificationService.getUnreadCount();
     }
+
+    @PatchMapping("/{notificationId}/read")
+    @Operation(summary = "알림 읽음", description = "알림 하나를 읽음으로 표시합니다. 이미 읽은 알림이면 그대로 둡니다.")
+    public GlobalResponse<NotificationResponseDto> read(@PathVariable Long notificationId) {
+        return notificationService.read(notificationId);
+    }
 }
