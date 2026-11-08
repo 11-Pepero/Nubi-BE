@@ -1,5 +1,7 @@
 package dev.hidly.nubi.program.service;
 
+import dev.hidly.nubi.application.data.repository.EventApplicationStats;
+import dev.hidly.nubi.application.service.EventApplicationService;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.common.security.SecurityUtil;
@@ -55,6 +57,7 @@ public class EventService {
     private final VenueRepository venueRepository;
     private final SupportTagRepository supportTagRepository;
     private final VenueService venueService;
+    private final EventApplicationService eventApplicationService;
 
     @Transactional
     public GlobalResponse<ProgramDetailResponseDto> create(EventCreateRequestDto request) {
@@ -96,8 +99,11 @@ public class EventService {
                 : programImageRepository.findAllByProgramIdInAndSortOrder(eventIds, 0).stream()
                 .collect(Collectors.toMap(image -> image.getProgram().getId(), ProgramImage::getUrl, (a, b) -> a));
 
-        return GlobalResponse.ok(PageResponse.from(
-                events.map(event -> EventSummaryResponseDto.of(event, thumbnails.get(event.getId())))));
+        Map<Long, EventApplicationStats> stats = eventApplicationService.statsOf(eventIds);
+
+        return GlobalResponse.ok(PageResponse.from(events.map(event -> EventSummaryResponseDto.of(event,
+                thumbnails.get(event.getId()),
+                stats.getOrDefault(event.getId(), EventApplicationStats.empty(event.getId()))))));
     }
 
     private void validate(EventCreateRequestDto request) {
