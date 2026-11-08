@@ -31,7 +31,7 @@ public class EventController {
     }
 
     @GetMapping
-    @Operation(summary = "내 행사 목록", description = "로그인 기관이 주최한 행사입니다. status를 여러 번 보내면 함께 조회합니다(진행 중 = OPEN, CLOSED / 지난 행사 = ENDED / 임시 저장 = DRAFT). 신청 기관 수, 참여 인원, 새 신청 수는 신청 기능이 생기기 전까지 0입니다.")
+    @Operation(summary = "내 행사 목록", description = "로그인 기관이 주최한 행사입니다. status를 여러 번 보내면 함께 조회합니다(진행 중 = OPEN, CLOSED / 지난 행사 = ENDED / 임시 저장 = DRAFT). 신청 기관 수, 참여 인원(이용자), 새 신청 수는 거절·취소를 뺀 신청 기준입니다.")
     public GlobalResponse<PageResponse<EventSummaryResponseDto>> getMyEvents(
             @RequestParam(required = false) List<ProgramStatus> status,
             @RequestParam(defaultValue = "0") @Min(0) int page,

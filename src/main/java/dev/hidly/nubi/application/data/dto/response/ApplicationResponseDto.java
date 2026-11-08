@@ -28,7 +28,7 @@ public record ApplicationResponseDto(
 ) {
     public record SupportSnapshot(Long applicationSupportId, Long supportTagId, SupportCategory category, String code,
                                   String label, Integer quantity, PrepStatus prepStatus, String hostNote) {
-        static SupportSnapshot from(ApplicationSupport support) {
+        public static SupportSnapshot from(ApplicationSupport support) {
             return new SupportSnapshot(support.getId(), support.getSupportTag().getId(),
                     support.getSupportTag().getCategory(), support.getSupportTag().getCode(),
                     support.getSupportTag().getLabel(), support.getQuantity(), support.getPrepStatus(),
@@ -37,7 +37,7 @@ public record ApplicationResponseDto(
     }
 
     public record CareSnapshot(Long carePersonId, String alias, String content) {
-        static CareSnapshot from(ApplicationCare care) {
+        public static CareSnapshot from(ApplicationCare care) {
             return new CareSnapshot(care.getCarePerson() == null ? null : care.getCarePerson().getId(),
                     care.getAliasSnapshot(), care.getContentSnapshot());
         }

@@ -1,6 +1,7 @@
 package dev.hidly.nubi.application.data.entity;
 
 import dev.hidly.nubi.application.data.enums.ApplicationStatus;
+import dev.hidly.nubi.application.data.exception.InvalidApplicationStatusException;
 import dev.hidly.nubi.common.jpa.BaseTimeEntity;
 import dev.hidly.nubi.organization.data.entity.Organization;
 import dev.hidly.nubi.program.data.entity.Program;
@@ -100,6 +101,19 @@ public class Application extends BaseTimeEntity {
                 .status(ApplicationStatus.SUBMITTED)
                 .submittedAt(LocalDateTime.now())
                 .build();
+    }
+
+    // 주최 기관의 확정·대기·거절. 확정·거절이면 결정 시각을 남기고, 대기로 돌리면 지운다.
+    public void decideByHost(ApplicationStatus next) {
+        if (!status.canBeDecidedByHostAs(next)) {
+            throw new InvalidApplicationStatusException();
+        }
+        this.status = next;
+        this.decidedAt = next == ApplicationStatus.WAITING ? null : LocalDateTime.now();
+    }
+
+    public boolean belongsTo(Long programId) {
+        return program.getId().equals(programId);
     }
 
     public void addSupport(ApplicationSupport support) {
