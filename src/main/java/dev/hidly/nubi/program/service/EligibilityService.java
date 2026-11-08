@@ -5,6 +5,7 @@ import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.program.data.dto.response.EligibilityResponseDto;
 import dev.hidly.nubi.program.data.dto.response.EligibleProgramResponseDto;
+import dev.hidly.nubi.program.data.dto.response.JudgementImpactResponseDto;
 import dev.hidly.nubi.program.data.dto.response.ProgramSummaryResponseDto;
 import dev.hidly.nubi.program.data.entity.Eligibility;
 import dev.hidly.nubi.program.data.entity.Program;
@@ -13,6 +14,7 @@ import dev.hidly.nubi.program.data.entity.ProgramImage;
 import dev.hidly.nubi.program.data.enums.EligibilityResult;
 import dev.hidly.nubi.program.data.enums.FacilityStatus;
 import dev.hidly.nubi.program.data.enums.FacilityType;
+import dev.hidly.nubi.program.data.enums.ItemResult;
 import dev.hidly.nubi.program.data.enums.ProgramStatus;
 import dev.hidly.nubi.program.data.exception.ProgramNotFoundException;
 import dev.hidly.nubi.program.data.repository.EligibilityRepository;
@@ -46,6 +48,8 @@ public class EligibilityService {
             .comparing((Judged judged) -> judged.judgement().result())
             .thenComparing(judged -> judged.program().getStartAt(), Comparator.nullsLast(Comparator.naturalOrder()))
             .thenComparing(judged -> judged.program().getId());
+
+    private static final int IMPACT_LIMIT = 20;
 
     private final ProgramRepository programRepository;
     private final ProgramConditionRepository programConditionRepository;
@@ -128,6 +132,41 @@ public class EligibilityService {
                     byResult.getOrDefault(EligibilityResult.NOT, 0L)));
         }
         return counts;
+    }
+
+    @Transactional(readOnly = true)
+    public JudgementImpactResponseDto impactOf(CarePerson target) {
+        SupportGroup group = target.getGroup();
+        if (group == null || !target.isApplyToJudgement()) {
+            return JudgementImpactResponseDto.NOT_APPLIED;
+        }
+
+        List<CarePerson> withTarget = defaultCarePersons(group,
+                carePersonRepository.findActiveWithItems(group.getOrganization().getId()));
+        List<CarePerson> withoutTarget = withTarget.stream()
+                .filter(care -> !care.getId().equals(target.getId()))
+                .toList();
+
+        List<JudgementImpactResponseDto.AffectedProgram> affected = new ArrayList<>();
+        for (ProgramFacts facts : loadFacts(openPrograms())) {
+            Judgement with = eligibilityJudge.judge(group, withTarget, facts);
+            Judgement without = eligibilityJudge.judge(group, withoutTarget, facts);
+            if (with.result() == without.result()) {
+                continue;
+            }
+            Program program = facts.program();
+            affected.add(new JudgementImpactResponseDto.AffectedProgram(program.getId(), program.getTitle(),
+                    program.getStartAt(), without.result(), with.result(),
+                    with.reasons().careChecks().stream()
+                            .filter(check -> check.careId().equals(target.getId()))
+                            .filter(check -> check.result() != ItemResult.MET && check.result() != ItemResult.NOTE)
+                            .toList()));
+        }
+
+        affected.sort(Comparator
+                .comparing(JudgementImpactResponseDto.AffectedProgram::startAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(JudgementImpactResponseDto.AffectedProgram::programId));
+        return new JudgementImpactResponseDto(true, affected.size(), affected.stream().limit(IMPACT_LIMIT).toList());
     }
 
     @Transactional

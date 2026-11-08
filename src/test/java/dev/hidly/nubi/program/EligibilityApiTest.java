@@ -434,4 +434,63 @@ class EligibilityApiTest {
         mockMvc.perform(get("/api/v1/programs/eligible").param("groupId", String.valueOf(groupId)))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void 개별_케어_상세에_이_사람_때문에_판정이_달라지는_프로그램이_나온다() throws Exception {
+        SupportTag signLanguage = tag("SIGN_LANGUAGE");
+        long groupId = createGroup(login.accessToken(), 6, """
+                [{"supportTagId":%d}]
+                """.formatted(signLanguage.getId()));
+        LocalDateTime earliest = LocalDateTime.of(2000, 1, 1, 0, 0).minusSeconds(System.currentTimeMillis() / 1000);
+        Program affected = programRepository.save(Program.builder().title("수어 제공, 충전 불가")
+                .startAt(earliest).status(ProgramStatus.OPEN).build());
+        condition(affected, signLanguage, ConditionStatus.PROVIDED, ConditionSource.HOST, null);
+        condition(affected, powerWheelchair, ConditionStatus.NOT_PROVIDED, ConditionSource.HOST, null);
+        Program alreadyCheck = programRepository.save(Program.builder().title("수어 정보 없음")
+                .startAt(earliest.plusMinutes(1)).status(ProgramStatus.OPEN).build());
+        condition(alreadyCheck, powerWheelchair, ConditionStatus.NOT_PROVIDED, ConditionSource.HOST, null);
+
+        long careId = createCarePerson(groupId, true, """
+                [{"supportTagId":%d,"content":"충전 콘센트"},{"content":"점심 후 휴식"}]
+                """.formatted(powerWheelchair.getId()));
+
+        String response = mockMvc.perform(get("/api/v1/care-persons/{careId}", careId)
+                        .header("Authorization", "Bearer " + login.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.judgementImpact.applied").value(true))
+                .andReturn().getResponse().getContentAsString();
+        String program = "$.data.judgementImpact.programs[?(@.programId == %d)]";
+        java.util.List<String> without = JsonPath.read(response, program.formatted(affected.getId()) + ".resultWithout");
+        java.util.List<String> with = JsonPath.read(response, program.formatted(affected.getId()) + ".resultWith");
+        java.util.List<String> checkCodes = JsonPath.read(response, program.formatted(affected.getId()) + ".checks[*].code");
+        java.util.List<String> checkResults = JsonPath.read(response, program.formatted(affected.getId()) + ".checks[*].result");
+        assertThat(without).containsExactly("ELIGIBLE");
+        assertThat(with).containsExactly("CHECK");
+        assertThat(checkCodes).containsExactly("POWER_WHEELCHAIR");
+        assertThat(checkResults).containsExactly("MISSING");
+        java.util.List<Integer> ids = JsonPath.read(response, "$.data.judgementImpact.programs[*].programId");
+        assertThat(ids).doesNotContain(alreadyCheck.getId().intValue());
+    }
+
+    @Test
+    void 판정_반영을_끄거나_문장만_있는_개별_케어는_영향이_없다() throws Exception {
+        long groupId = wheelchairAndEasyWordsGroup();
+        long notApplied = createCarePerson(groupId, false, """
+                [{"supportTagId":%d}]
+                """.formatted(powerWheelchair.getId()));
+        long noteOnly = createCarePerson(groupId, true, """
+                [{"content":"점심 후 휴식"}]
+                """);
+
+        mockMvc.perform(get("/api/v1/care-persons/{careId}", notApplied)
+                        .header("Authorization", "Bearer " + login.accessToken()))
+                .andExpect(jsonPath("$.data.judgementImpact.applied").value(false))
+                .andExpect(jsonPath("$.data.judgementImpact.affectedCount").value(0));
+        mockMvc.perform(get("/api/v1/care-persons/{careId}", noteOnly)
+                        .header("Authorization", "Bearer " + login.accessToken()))
+                .andExpect(jsonPath("$.data.judgementImpact.applied").value(true))
+                .andExpect(jsonPath("$.data.judgementImpact.affectedCount").value(0));
+        mockMvc.perform(get("/api/v1/care-persons").header("Authorization", "Bearer " + login.accessToken()))
+                .andExpect(jsonPath("$.data[0].judgementImpact").isEmpty());
+    }
 }
