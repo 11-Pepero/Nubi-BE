@@ -1,7 +1,14 @@
 package dev.hidly.nubi.application.service;
 
 import dev.hidly.nubi.application.data.dto.request.DirectApplicationRequestDto;
+import dev.hidly.nubi.application.data.dto.request.PrepareApplicationRequestDto;
+import dev.hidly.nubi.application.data.dto.request.SubmittedRequestDto;
 import dev.hidly.nubi.application.data.dto.response.ApplicationResponseDto;
+import dev.hidly.nubi.application.data.dto.response.MyApplicationDetailResponseDto;
+import dev.hidly.nubi.application.data.dto.response.PreparedApplicationResponseDto;
+import dev.hidly.nubi.application.data.exception.ApplicationAccessDeniedException;
+import dev.hidly.nubi.application.data.exception.ApplicationNotFoundException;
+import dev.hidly.nubi.application.data.exception.InvalidApplicationRequestException;
 import dev.hidly.nubi.application.data.entity.Application;
 import dev.hidly.nubi.application.data.entity.ApplicationCare;
 import dev.hidly.nubi.application.data.entity.ApplicationMessage;
@@ -78,15 +85,7 @@ public class ApplicationService {
         Organization applicant = organizationRepository.getReferenceById(organizationId);
         Application application = Application.direct(program, applicant, group, participantCount, companionCount,
                 trimToNull(request.getTransport()));
-        group.getSupports().forEach(support -> application.addSupport(ApplicationSupport.builder()
-                .supportTag(support.getSupportTag())
-                .quantity(support.getQuantity())
-                .build()));
-        carePersons.forEach(care -> application.addCare(ApplicationCare.builder()
-                .carePerson(care)
-                .aliasSnapshot(care.getAlias())
-                .contentSnapshot(describe(care))
-                .build()));
+        copySnapshots(application, group, carePersons);
         String message = trimToNull(request.getMessage());
         if (message != null) {
             application.addMessage(ApplicationMessage.builder().senderOrganization(applicant).body(message).build());
@@ -97,6 +96,75 @@ public class ApplicationService {
                 organizationId, programId, application.getId(), participantCount, carePersons.size());
 
         return GlobalResponse.ok(ApplicationResponseDto.from(application));
+    }
+
+    // 외부 공고 신청 준비: 앱은 대신 접수하지 않고, 준비 중(PREPARING) 신청과 접수 채널만 만들어 준다.
+    @Transactional
+    public GlobalResponse<PreparedApplicationResponseDto> prepare(PrepareApplicationRequestDto request) {
+        Long organizationId = SecurityUtil.getOrganizationId();
+        Program program = programRepository.findById(request.getProgramId())
+                .filter(p -> !p.isDeleted())
+                .orElseThrow(ProgramNotFoundException::new);
+        validatePreparable(program, organizationId);
+
+        SupportGroup group = getOwnedGroup(request.getGroupId(), organizationId);
+        List<CarePerson> carePersons = getOwnedCarePersons(request.careIdsOrEmpty(), organizationId);
+        if (applicationRepository.existsByProgramIdAndGroupIdAndStatusIn(program.getId(), group.getId(), ApplicationStatus.IN_PROGRESS)) {
+            throw new ApplicationDuplicatedException();
+        }
+        int participantCount = request.getParticipantCount() != null ? request.getParticipantCount() : group.getMemberCount();
+        int companionCount = request.getCompanionCount() != null ? request.getCompanionCount() : 0;
+
+        Application application = Application.prepare(program, organizationRepository.getReferenceById(organizationId),
+                group, participantCount, companionCount);
+        copySnapshots(application, group, carePersons);
+        applicationRepository.save(application);
+        log.info("[prepareApplication] 신청 준비: organizationId={}, programId={}, applicationId={}, 채널 {}",
+                organizationId, program.getId(), application.getId(), program.getApplyMethod());
+
+        return GlobalResponse.ok(PreparedApplicationResponseDto.of(application));
+    }
+
+    // 담당자가 전화·온라인·서면으로 직접 접수한 뒤 누르는 "접수 완료" (PREPARING → SUBMITTED)
+    @Transactional
+    public GlobalResponse<MyApplicationDetailResponseDto> markSubmitted(Long applicationId, SubmittedRequestDto request) {
+        Application application = applicationRepository.findWithProgramById(applicationId)
+                .orElseThrow(ApplicationNotFoundException::new);
+        if (!application.getApplicantOrganization().getId().equals(SecurityUtil.getOrganizationId())) {
+            throw new ApplicationAccessDeniedException();
+        }
+        LocalDateTime submittedAt = request.getSubmittedAt() != null ? request.getSubmittedAt() : LocalDateTime.now();
+        if (submittedAt.isAfter(LocalDateTime.now().plusMinutes(1)) || request.getChannel() == ApplyMethod.DIRECT) {
+            throw new InvalidApplicationRequestException();
+        }
+        application.markSubmitted(request.getChannel(), submittedAt);
+        applicationRepository.flush();
+        log.info("[markSubmitted] 접수 완료: applicationId={}, channel={}", applicationId, application.getChannel());
+
+        return GlobalResponse.ok(MyApplicationDetailResponseDto.from(application));
+    }
+
+    private void validatePreparable(Program program, Long organizationId) {
+        LocalDateTime now = LocalDateTime.now();
+        boolean directOrUnknown = program.getApplyMethod() == null || program.getApplyMethod() == ApplyMethod.DIRECT;
+        boolean notOpen = program.getStatus() != ProgramStatus.OPEN;
+        boolean ownProgram = program.isHostedBy(organizationId);
+        boolean pastDeadline = program.getDeadlineAt() != null && now.isAfter(program.getDeadlineAt());
+        if (directOrUnknown || notOpen || ownProgram || pastDeadline) {
+            throw new ApplicationNotAllowedException();
+        }
+    }
+
+    private void copySnapshots(Application application, SupportGroup group, List<CarePerson> carePersons) {
+        group.getSupports().forEach(support -> application.addSupport(ApplicationSupport.builder()
+                .supportTag(support.getSupportTag())
+                .quantity(support.getQuantity())
+                .build()));
+        carePersons.forEach(care -> application.addCare(ApplicationCare.builder()
+                .carePerson(care)
+                .aliasSnapshot(care.getAlias())
+                .contentSnapshot(describe(care))
+                .build()));
     }
 
     private void validateDirectApplicable(Program program, Long organizationId) {
