@@ -14,6 +14,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.nio.charset.StandardCharsets;
+
 @Getter
 @Builder
 @NoArgsConstructor
@@ -58,5 +60,11 @@ public class SignUpRequestDto {
 
     public boolean hasLocation() {
         return latitude != null && longitude != null;
+    }
+
+    @JsonIgnore
+    @AssertTrue(message = "비밀번호는 72바이트를 넘을 수 없습니다.")
+    public boolean isPasswordWithinBcryptLimit() {
+        return password == null || password.getBytes(StandardCharsets.UTF_8).length <= 72;
     }
 }

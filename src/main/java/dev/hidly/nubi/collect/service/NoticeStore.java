@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -26,45 +25,29 @@ public class NoticeStore {
     }
 
     @Transactional
-    public int save(List<NoticeData> notices) {
-        LocalDateTime now = LocalDateTime.now();
-        int saved = 0;
-        for (NoticeData notice : notices) {
-            if (rawNoticeRepository.existsByExternalId(notice.externalId())) {
-                continue;
-            }
-            RawNotice rawNotice = rawNoticeRepository.save(RawNotice.builder()
-                    .dataset(notice.dataset())
-                    .externalId(notice.externalId())
-                    .rawJson(notice.raw())
-                    .build());
-            programRepository.save(Program.builder()
-                    .rawNotice(rawNotice)
-                    .venue(venueResolver.resolve(notice.placeName(), notice.address()))
-                    .title(truncate(notice.title(), 150))
-                    .category(notice.category())
-                    .description(notice.description())
-                    .startAt(notice.startAt())
-                    .endAt(notice.endAt())
-                    .contactPhone(notice.contactPhone())
-                    .applyUrl(truncate(notice.sourceUrl(), 300))
-                    .status(notice.endAt() != null && notice.endAt().isBefore(now) ? ProgramStatus.ENDED : ProgramStatus.OPEN)
-                    .build());
-            saved++;
+    public boolean save(NoticeData notice) {
+        if (rawNoticeRepository.existsByExternalId(notice.externalId())) {
+            return false;
         }
-        return saved;
-    }
-
-    @Transactional
-    public int fillMissingLocations() {
-        return venueResolver.fillMissingLocations();
-    }
-
-    @Transactional
-    public int endExpired() {
-        List<Program> expired = programRepository.findCollectedEndedBefore(ProgramStatus.OPEN, LocalDateTime.now());
-        expired.forEach(Program::end);
-        return expired.size();
+        RawNotice rawNotice = rawNoticeRepository.save(RawNotice.builder()
+                .dataset(notice.dataset())
+                .externalId(notice.externalId())
+                .rawJson(notice.raw())
+                .build());
+        programRepository.save(Program.builder()
+                .rawNotice(rawNotice)
+                .venue(venueResolver.resolve(notice.placeName(), notice.address()))
+                .title(truncate(notice.title(), 150))
+                .category(notice.category())
+                .description(notice.description())
+                .startAt(notice.startAt())
+                .endAt(notice.endAt())
+                .contactPhone(truncate(notice.contactPhone(), 20))
+                .applyUrl(truncate(notice.sourceUrl(), 300))
+                .status(notice.endAt() != null && notice.endAt().isBefore(LocalDateTime.now())
+                        ? ProgramStatus.ENDED : ProgramStatus.OPEN)
+                .build());
+        return true;
     }
 
     private String truncate(String value, int max) {

@@ -75,7 +75,6 @@ public class CarePersonService {
         toCareItems(request).forEach(carePerson::addItem);
 
         carePersonRepository.save(carePerson);
-        recomputeGroup(carePerson);
         log.info("[createCarePerson] 개별 케어 추가: organizationId={}, careId={}", organizationId, carePerson.getId());
 
         return GlobalResponse.ok(CarePersonResponseDto.from(carePerson));
@@ -94,7 +93,6 @@ public class CarePersonService {
         carePerson.update(request.getAlias().trim(), trimToNull(request.getMemo()), request.applyToJudgementOrDefault());
         carePerson.replaceItems(toCareItems(request));
         carePersonRepository.flush();
-        recomputeGroup(carePerson);
         log.info("[updateCarePerson] 개별 케어 수정: careId={}", careId);
 
         return GlobalResponse.ok(CarePersonResponseDto.from(carePerson));
@@ -105,16 +103,10 @@ public class CarePersonService {
         CarePerson carePerson = getOwnedCarePerson(careId);
         carePerson.delete();
         carePersonRepository.flush();
-        recomputeGroup(carePerson);
         log.info("[deleteCarePerson] 개별 케어 삭제: careId={}", careId);
         return GlobalResponse.ok();
     }
 
-    private void recomputeGroup(CarePerson carePerson) {
-        if (carePerson.getGroup() != null) {
-            eligibilityService.recompute(carePerson.getGroup());
-        }
-    }
 
     private CarePerson getOwnedCarePerson(Long careId) {
         CarePerson carePerson = carePersonRepository.findActiveWithItemsById(careId)

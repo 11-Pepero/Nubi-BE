@@ -2,6 +2,7 @@ package dev.hidly.nubi.support.data.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +22,7 @@ public class CarePersonUpdateRequestDto implements CarePersonRequest {
 
     @Valid
     @Size(max = 30)
-    private List<CareItemRequestDto> items;
+    private List<@NotNull @Valid CareItemRequestDto> items;
 
     @Size(max = 1000)
     private String memo;

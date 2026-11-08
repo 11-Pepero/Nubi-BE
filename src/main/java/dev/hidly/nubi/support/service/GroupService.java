@@ -69,7 +69,6 @@ public class GroupService {
         toGroupSupports(request).forEach(group::addSupport);
 
         supportGroupRepository.save(group);
-        eligibilityService.recompute(group);
         log.info("[createGroup] 그룹 생성: organizationId={}, groupId={}", organizationId, group.getId());
 
         return GlobalResponse.ok(toResponse(group));
@@ -87,7 +86,6 @@ public class GroupService {
         group.update(request.getName().trim(), request.getMemberCount());
         group.replaceSupports(toGroupSupports(request));
         supportGroupRepository.flush();
-        eligibilityService.recompute(group);
         log.info("[updateGroup] 그룹 수정: groupId={}", groupId);
 
         return GlobalResponse.ok(toResponse(group));

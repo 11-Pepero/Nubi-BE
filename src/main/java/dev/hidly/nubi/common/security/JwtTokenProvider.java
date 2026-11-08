@@ -1,15 +1,17 @@
 package dev.hidly.nubi.common.security;
 
+import dev.hidly.nubi.common.logging.LogMasking;
+import dev.hidly.nubi.common.redis.RedisService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtBuilder;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
-import dev.hidly.nubi.common.redis.RedisService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -18,13 +20,13 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.SecretKey;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import javax.crypto.SecretKey;
 
 @Component
 @Slf4j
@@ -62,7 +64,7 @@ public class JwtTokenProvider {
     }
 
     private JwtBuilder baseToken(String email, String tokenType, Date expireDate) {
-        log.info("[createToken] 새 {} JWT 발급 됨: {}", tokenType, email);
+        log.debug("[createToken] 새 {} JWT 발급 됨: {}", tokenType, LogMasking.email(email));
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(email)
@@ -74,7 +76,7 @@ public class JwtTokenProvider {
     public AuthenticationToken generateToken(LoginMember loginMember) {
         String username = loginMember.email();
 
-        log.info("[generateToken] 새 JWT 발급 시도: {}", username);
+        log.debug("[generateToken] 새 JWT 발급 시도: {}", LogMasking.email(username));
 
         long now = (new Date()).getTime();
 
@@ -86,7 +88,7 @@ public class JwtTokenProvider {
         String refreshToken = baseToken(username, REFRESH_TOKEN_TYPE, new Date(now + REFRESH_TOKEN_EXPIRE_TIME))
                 .compact();
 
-        log.info("[generateToken] 발급된 Refresh Token이 Redis에 저장 됨");
+        log.debug("[generateToken] 발급된 Refresh Token이 Redis에 저장 됨");
         redisService.setValues(REFRESH_KEY_PREFIX + username, refreshToken,
                 Duration.ofMillis(REFRESH_TOKEN_EXPIRE_TIME));
 
@@ -110,7 +112,7 @@ public class JwtTokenProvider {
         if (storedRefreshToken != null) {
             blacklistToken(storedRefreshToken.toString(), "Refresh Token", username);
             redisService.deleteValues(REFRESH_KEY_PREFIX + username);
-            log.info("[invalidateToken] 저장된 Refresh Token이 Redis에서 삭제 됨: {}", username);
+            log.info("[invalidateToken] 저장된 Refresh Token이 Redis에서 삭제 됨: {}", LogMasking.email(username));
         }
 
         blacklistToken(accessToken, "Access Token", username);
@@ -120,25 +122,41 @@ public class JwtTokenProvider {
         long remainingTime = parseClaims(token).getExpiration().getTime() - System.currentTimeMillis();
 
         if (remainingTime <= 0) {
-            log.info("[blacklistToken] 이미 만료된 {}이라 블랙리스트 등록 생략: {}", tokenName, username);
+            log.debug("[blacklistToken] 이미 만료된 {}이라 블랙리스트 등록 생략: {}", tokenName, LogMasking.email(username));
             return;
         }
 
         redisService.setValues(BLACKLIST_KEY_PREFIX + token, BLACKLIST_VALUE, Duration.ofMillis(remainingTime));
-        log.info("[blacklistToken] {}이 블랙리스트에 등록 됨: {} (남은 시간: {}ms)", tokenName, username, remainingTime);
+        log.info("[blacklistToken] {}이 블랙리스트에 등록 됨: {} (남은 시간: {}ms)", tokenName, LogMasking.email(username), remainingTime);
     }
 
     public String getUsername(String token) {
         return parseClaims(token).getSubject();
     }
 
-    public boolean isStoredRefreshToken(String username, String refreshToken) {
-        Object storedRefreshToken = redisService.getValues(REFRESH_KEY_PREFIX + username);
+    public boolean consumeRefreshToken(String username, String refreshToken) {
+        Object storedRefreshToken = redisService.getAndDelete(REFRESH_KEY_PREFIX + username);
         return storedRefreshToken != null && storedRefreshToken.toString().equals(refreshToken);
     }
 
     public boolean isBlacklisted(String token) {
-        return redisService.hasKey(BLACKLIST_KEY_PREFIX + token);
+        try {
+            return redisService.hasKey(BLACKLIST_KEY_PREFIX + token);
+        } catch (RuntimeException e) {
+            log.error("[isBlacklisted] 블랙리스트 조회 실패, 토큰을 거부함: {}", e.getMessage());
+            return true;
+        }
+    }
+
+    public boolean isSignedAccessToken(String token) {
+        try {
+            Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+            return ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM));
+        } catch (ExpiredJwtException e) {
+            return ACCESS_TOKEN_TYPE.equals(e.getClaims().get(TOKEN_TYPE_CLAIM));
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
     }
 
     public Authentication getAuthentication(String accessToken) {

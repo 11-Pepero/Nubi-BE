@@ -31,6 +31,18 @@ public class RedisService {
         redisTemplate.delete(key);
     }
 
+    public long increment(String key, Duration ttl) {
+        Long count = values.increment(key);
+        if (count != null && count == 1L) {
+            redisTemplate.expire(key, ttl);
+        }
+        return count == null ? 0L : count;
+    }
+
+    public Object getAndDelete(String key) {
+        return values.getAndDelete(key);
+    }
+
     public boolean hasKey(String key) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(key));
     }

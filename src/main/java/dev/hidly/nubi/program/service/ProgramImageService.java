@@ -39,7 +39,8 @@ public class ProgramImageService {
 
     @Transactional
     public GlobalResponse<List<ProgramImageResponseDto>> upload(Long eventId, List<MultipartFile> images) {
-        Program program = getHostedProgram(eventId);
+        getHostedProgram(eventId);
+        Program program = programRepository.findLockedById(eventId).orElseThrow(ProgramNotFoundException::new);
         List<ProgramImage> current = programImageRepository.findAllByProgramIdOrderBySortOrderAsc(program.getId());
         if (images == null || images.isEmpty() || current.size() + images.size() > MAX_IMAGES) {
             throw new ImageCountExceededException();
