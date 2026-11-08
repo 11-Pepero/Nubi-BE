@@ -163,6 +163,39 @@ class RegionApiTest {
     }
 
     @Test
+    void 지도_표시점은_시설과_좌표_있는_그_달_프로그램을_준다() throws Exception {
+        String token = token();
+        String name = "표시점 테스트 " + UUID.randomUUID();
+        Venue accessible = venueRepository.save(Venue.builder().name(name).district(District.SUJI)
+                .location(GeoPoints.of(37.32, 127.09)).build());
+        venueFacilityRepository.save(VenueFacility.builder().venue(accessible).facilityType(FacilityType.RAMP)
+                .status(FacilityStatus.YES).source(FacilitySource.HOST).build());
+        Venue noLocation = venueRepository.save(Venue.builder().name(name + " 좌표 없음").district(District.SUJI).build());
+        LocalDateTime inMonth = LocalDateTime.of(2099, 6, 20, 10, 0);
+        program(accessible, ProgramStatus.OPEN, inMonth);
+        program(noLocation, ProgramStatus.OPEN, inMonth);
+
+        String response = mockMvc.perform(get("/api/v1/regions/markers").param("district", "SUJI").param("month", MONTH)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.facilities.length()").value(3))
+                .andReturn().getResponse().getContentAsString();
+
+        List<Boolean> mine = JsonPath.read(response, "$.data.programs[?(@.venueName=='" + name + "')].accessible");
+        assertThat(mine).containsExactly(true);
+        List<String> noLocationNames = JsonPath.read(response, "$.data.programs[?(@.venueName=='" + name + " 좌표 없음')].venueName");
+        assertThat(noLocationNames).isEmpty();
+        List<String> districts = JsonPath.read(response, "$.data.programs[*].district");
+        assertThat(districts).containsOnly("SUJI");
+
+        String all = mockMvc.perform(get("/api/v1/regions/markers").param("month", MONTH).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.data.facilities.length()").value(43))
+                .andReturn().getResponse().getContentAsString();
+        List<String> groupHomeNames = JsonPath.read(all, "$.data.facilities[?(@.facilityType=='공동생활가정')].name");
+        assertThat(groupHomeNames).hasSize(11).containsOnly("공동생활가정");
+    }
+
+    @Test
     void 없는_구면_400() throws Exception {
         mockMvc.perform(get("/api/v1/regions/districts/SEOUL").header("Authorization", "Bearer " + token()))
                 .andExpect(status().isBadRequest());

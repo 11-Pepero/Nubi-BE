@@ -2,7 +2,11 @@ package dev.hidly.nubi.region.service;
 
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.organization.data.enums.District;
+import dev.hidly.nubi.program.data.entity.Program;
+import dev.hidly.nubi.program.data.entity.Venue;
 import dev.hidly.nubi.program.data.repository.ProgramSpecifications;
+import dev.hidly.nubi.region.data.DisabilityFacilities;
+import dev.hidly.nubi.region.data.dto.response.MarkersResponseDto;
 import dev.hidly.nubi.region.data.dto.response.DistrictDetailResponseDto;
 import dev.hidly.nubi.region.data.dto.response.DistrictStatResponseDto;
 import dev.hidly.nubi.region.data.dto.response.DistrictStatsResponseDto;
@@ -18,12 +22,14 @@ import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class RegionService {
     private final RegionStatRepository regionStatRepository;
+    private final DisabilityFacilities disabilityFacilities;
 
     private record Period(YearMonth month, LocalDateTime from, LocalDateTime to) {
         static Period of(YearMonth month) {
@@ -70,6 +76,33 @@ public class RegionService {
                         .thenComparing(EmdStatResponseDto::emdName))
                 .toList();
         return GlobalResponse.ok(new DistrictDetailResponseDto(period.month(), summary, emds));
+    }
+
+    @Transactional(readOnly = true)
+    public GlobalResponse<MarkersResponseDto> getMarkers(District district, YearMonth month) {
+        Period period = Period.of(month);
+        List<MarkersResponseDto.FacilityMarker> facilities = disabilityFacilities.all().stream()
+                .filter(facility -> district == null || facility.district() == district)
+                .map(facility -> new MarkersResponseDto.FacilityMarker(facility.name(), facility.facilityType(),
+                        facility.district(), facility.emdName(), facility.latitude(), facility.longitude()))
+                .toList();
+
+        List<Program> programs = regionStatRepository.findMappablePrograms(
+                        ProgramSpecifications.SEARCHABLE_STATUSES, period.from(), period.to()).stream()
+                .filter(program -> district == null || program.getVenue().getDistrict() == district)
+                .toList();
+        Set<Long> venueIds = programs.stream().map(program -> program.getVenue().getId()).collect(Collectors.toSet());
+        Set<Long> accessibleVenues = venueIds.isEmpty() ? Set.of() : Set.copyOf(
+                regionStatRepository.findAccessibleVenueIds(venueIds, ProgramSpecifications.ACCESSIBILITY_FACILITIES));
+        List<MarkersResponseDto.ProgramMarker> programMarkers = programs.stream()
+                .map(program -> {
+                    Venue venue = program.getVenue();
+                    return new MarkersResponseDto.ProgramMarker(program.getId(), program.getTitle(), program.getStartAt(),
+                            venue.getName(), venue.getDistrict(), accessibleVenues.contains(venue.getId()),
+                            venue.getLocation().getY(), venue.getLocation().getX());
+                })
+                .toList();
+        return GlobalResponse.ok(new MarkersResponseDto(period.month(), facilities, programMarkers));
     }
 
     private static DistrictStatResponseDto toDto(RegionStat stat, long programCount, long accessibleProgramCount) {
