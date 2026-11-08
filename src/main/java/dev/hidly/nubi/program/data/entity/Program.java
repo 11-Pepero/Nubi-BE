@@ -89,6 +89,26 @@ public class Program extends BaseTimeEntity {
         this.status = status == null ? ProgramStatus.DRAFT : status;
     }
 
+    public static Program event(Organization host, Venue venue, String title, ProgramCategory category,
+                                String description, LocalDateTime startAt, LocalDateTime endAt, Integer capacity,
+                                String contactPhone, LocalDateTime deadlineAt, ProgramStatus status) {
+        return Program.builder()
+                .hostOrganization(host)
+                .hostName(host.getName())
+                .venue(venue)
+                .title(title)
+                .category(category)
+                .description(description)
+                .startAt(startAt)
+                .endAt(endAt)
+                .capacity(capacity)
+                .applyMethod(ApplyMethod.DIRECT)
+                .contactPhone(contactPhone)
+                .deadlineAt(deadlineAt)
+                .status(status)
+                .build();
+    }
+
     public boolean isDeleted() {
         return deletedAt != null;
     }
