@@ -1,0 +1,66 @@
+package dev.hidly.nubi.notification;
+
+import com.jayway.jsonpath.JsonPath;
+import dev.hidly.nubi.notification.data.enums.NotificationTargetType;
+import dev.hidly.nubi.notification.data.enums.NotificationType;
+import dev.hidly.nubi.notification.service.NotificationService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.UUID;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+class NotificationApiTest {
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private NotificationService notificationService;
+
+    private record Login(String accessToken, Long organizationId) {
+    }
+
+    private Login signUp() throws Exception {
+        String body = """
+                {"orgName":"용인 주간활동센터","type":"DAY_CARE","address":"용인시 처인구 중부대로 1199","email":"%s","password":"Passw0rd!123"}
+                """.formatted("test-" + UUID.randomUUID() + "@nubi.dev");
+        String response = mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Number organizationId = JsonPath.read(response, "$.data.organizationId");
+        return new Login(JsonPath.read(response, "$.data.accessToken"), organizationId.longValue());
+    }
+
+    private void notify(Long organizationId, String title) {
+        notificationService.notify(organizationId, NotificationType.NEW_APPLICATION, title, "주간활동 A 그룹이 신청했어요.",
+                NotificationTargetType.APPLICATION, 1L);
+    }
+
+    @Test
+    void 내_기관_알림만_최신순으로_받는다() throws Exception {
+        Login me = signUp();
+        Login other = signUp();
+        notify(me.organizationId(), "첫 번째 알림");
+        notify(me.organizationId(), "두 번째 알림");
+        notify(other.organizationId(), "다른 기관 알림");
+
+        mockMvc.perform(get("/api/v1/notifications").header("Authorization", "Bearer " + me.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(2))
+                .andExpect(jsonPath("$.data.content[0].title").value("두 번째 알림"))
+                .andExpect(jsonPath("$.data.content[0].type").value("NEW_APPLICATION"))
+                .andExpect(jsonPath("$.data.content[0].targetType").value("APPLICATION"))
+                .andExpect(jsonPath("$.data.content[0].read").value(false));
+    }
+}

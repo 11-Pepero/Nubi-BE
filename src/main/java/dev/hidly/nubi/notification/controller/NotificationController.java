@@ -1,0 +1,28 @@
+package dev.hidly.nubi.notification.controller;
+
+import dev.hidly.nubi.common.response.GlobalResponse;
+import dev.hidly.nubi.common.response.PageResponse;
+import dev.hidly.nubi.notification.data.dto.response.NotificationResponseDto;
+import dev.hidly.nubi.notification.service.NotificationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+@Tag(name = "알림", description = "알림 목록, 실시간 알림")
+@RestController
+@RequestMapping("/api/v1/notifications")
+@RequiredArgsConstructor
+public class NotificationController {
+    private final NotificationService notificationService;
+
+    @GetMapping
+    @Operation(summary = "알림 목록", description = "로그인 기관이 받은 알림을 최신순으로 조회합니다.")
+    public GlobalResponse<PageResponse<NotificationResponseDto>> getMyNotifications(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return notificationService.getMyNotifications(page, size);
+    }
+}
