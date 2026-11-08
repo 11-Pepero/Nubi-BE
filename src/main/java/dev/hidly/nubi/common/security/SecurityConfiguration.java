@@ -1,5 +1,6 @@
 package dev.hidly.nubi.common.security;
 
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -55,7 +56,8 @@ public class SecurityConfiguration {
         );
 
         httpSecurity.authorizeHttpRequests(authorize ->
-                authorize.requestMatchers(
+                authorize.dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
+                        .requestMatchers(
                                 "/api/v1/auth/signup",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",

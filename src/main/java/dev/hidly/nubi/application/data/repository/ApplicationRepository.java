@@ -74,4 +74,14 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     // 신청에는 담당자가 따로 저장되지 않아 기관의 첫 담당자를 연락처로 쓴다.
     @Query("select m from Member m where m.organization.id in :organizationIds order by m.id")
     List<Member> findMembersOfOrganizations(@Param("organizationIds") Collection<Long> organizationIds);
+
+    // 마감 알림용: 모집 중인 프로그램 중 마감이 [from, to)에 있고 아직 작성 중인 신청
+    @Query("""
+            select a from Application a join fetch a.program p
+            where a.status = dev.hidly.nubi.application.data.enums.ApplicationStatus.PREPARING
+              and p.status = dev.hidly.nubi.program.data.enums.ProgramStatus.OPEN
+              and p.deletedAt is null
+              and p.deadlineAt >= :from and p.deadlineAt < :to
+            """)
+    List<Application> findPreparingByDeadlineBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }
