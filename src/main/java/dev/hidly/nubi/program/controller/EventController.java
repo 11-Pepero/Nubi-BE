@@ -3,6 +3,7 @@ package dev.hidly.nubi.program.controller;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.program.data.dto.request.EventCreateRequestDto;
+import dev.hidly.nubi.program.data.dto.response.EventDashboardResponseDto;
 import dev.hidly.nubi.program.data.dto.response.EventSummaryResponseDto;
 import dev.hidly.nubi.program.data.dto.response.ProgramDetailResponseDto;
 import dev.hidly.nubi.program.data.enums.ProgramStatus;
@@ -28,6 +29,12 @@ public class EventController {
     @Operation(summary = "행사 등록", description = "로그인 기관이 주최하는 행사를 만듭니다. status는 DRAFT(임시 저장) 또는 OPEN(공개하기), 신청 방법은 DIRECT(앱에서 바로 신청)로 고정됩니다. conditions는 주최가 확인한 참여 조건(source=HOST)으로 저장합니다.")
     public GlobalResponse<ProgramDetailResponseDto> create(@Valid @RequestBody EventCreateRequestDto request) {
         return eventService.create(request);
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "행사 관리 요약", description = "진행 중(공개 중+마감)·지난·임시 저장 행사 수, 아직 정하지 않은 새 신청 수, 이번 달에 시작하는 행사의 확정 인원(이용자, 동반 인력)입니다. 받은 후기 수는 후기 기능이 생기면 추가합니다.")
+    public GlobalResponse<EventDashboardResponseDto> getDashboard() {
+        return eventService.getDashboard();
     }
 
     @GetMapping
