@@ -1,6 +1,8 @@
 package dev.hidly.nubi.region.controller;
 
 import dev.hidly.nubi.common.response.GlobalResponse;
+import dev.hidly.nubi.organization.data.enums.District;
+import dev.hidly.nubi.region.data.dto.response.DistrictDetailResponseDto;
 import dev.hidly.nubi.region.data.dto.response.DistrictStatsResponseDto;
 import dev.hidly.nubi.region.service.RegionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -8,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,5 +31,14 @@ public class RegionController {
     public GlobalResponse<DistrictStatsResponseDto> getDistricts(
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month) {
         return regionService.getDistricts(month);
+    }
+
+    @GetMapping("/districts/{district}")
+    @Operation(summary = "읍면동 상세", description = "구 요약(구별 사각지대와 같은 값)과 그 구의 읍면동별 시설 수, 등록장애인 수, 그 달 프로그램 수를 줍니다. "
+            + "district는 CHEOIN, GIHEUNG, SUJI. emds는 참여 기회가 적은 순(프로그램이 적은 곳, 같으면 시설이 많은 곳부터)입니다.")
+    public GlobalResponse<DistrictDetailResponseDto> getDistrict(
+            @PathVariable District district,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month) {
+        return regionService.getDistrict(district, month);
     }
 }

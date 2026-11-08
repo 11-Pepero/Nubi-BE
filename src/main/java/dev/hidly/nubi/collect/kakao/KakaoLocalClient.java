@@ -15,6 +15,7 @@ import java.util.Optional;
 @Component
 public class KakaoLocalClient {
     private static final String KEYWORD_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
+    private static final String REGION_CODE_URL = "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json";
 
     public record Place(String name, String address, double latitude, double longitude) {
     }
@@ -54,6 +55,34 @@ public class KakaoLocalClient {
             }
         } catch (RuntimeException e) {
             log.warn("[KakaoLocalClient] 장소 검색 실패: {} ({})", query, summarize(e));
+        }
+        return Optional.empty();
+    }
+
+    // 좌표가 속한 행정동 코드(10자리). 등록장애인 통계가 행정동 기준이라 법정동(B)이 아닌 H를 쓴다.
+    public Optional<String> findAdministrativeDongCode(double latitude, double longitude) {
+        if (!isEnabled()) {
+            return Optional.empty();
+        }
+        try {
+            Map<String, Object> response = collectRestClient.get()
+                    .uri(UriComponentsBuilder.fromUriString(REGION_CODE_URL).queryParam("x", longitude).queryParam("y", latitude)
+                            .build().toUri())
+                    .header("Authorization", "KakaoAK " + restApiKey.trim())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {
+                    });
+            Object documents = response == null ? null : response.get("documents");
+            if (documents instanceof List<?> list) {
+                return list.stream()
+                        .filter(Map.class::isInstance)
+                        .map(Map.class::cast)
+                        .filter(document -> "H".equals(document.get("region_type")))
+                        .map(document -> String.valueOf(document.get("code")))
+                        .findFirst();
+            }
+        } catch (RuntimeException e) {
+            log.warn("[KakaoLocalClient] 행정동 조회 실패: {}, {} ({})", latitude, longitude, summarize(e));
         }
         return Optional.empty();
     }

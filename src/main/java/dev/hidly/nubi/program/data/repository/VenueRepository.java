@@ -10,4 +10,6 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
     Optional<Venue> findFirstByNameOrderByIdAsc(String name);
 
     List<Venue> findTop50ByLocationIsNullOrderByIdAsc();
+
+    List<Venue> findTop100ByLocationIsNotNullAndEmdCodeIsNullOrderByIdAsc();
 }

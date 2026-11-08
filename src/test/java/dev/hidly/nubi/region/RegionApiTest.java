@@ -1,6 +1,13 @@
 package dev.hidly.nubi.region;
 
 import com.jayway.jsonpath.JsonPath;
+import dev.hidly.nubi.collect.kakao.KakaoLocalClient;
+import dev.hidly.nubi.common.geo.GeoPoints;
+import dev.hidly.nubi.region.service.VenueEmdFiller;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import java.util.Optional;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.BDDMockito.given;
 import dev.hidly.nubi.organization.data.enums.District;
 import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.entity.Venue;
@@ -42,6 +49,10 @@ class RegionApiTest {
     private VenueFacilityRepository venueFacilityRepository;
     @Autowired
     private ProgramRepository programRepository;
+    @Autowired
+    private VenueEmdFiller venueEmdFiller;
+    @MockitoBean
+    private KakaoLocalClient kakaoLocalClient;
 
     private String token() throws Exception {
         String body = """
@@ -107,6 +118,54 @@ class RegionApiTest {
                 .andExpect(jsonPath("$.data.districts[0].facilityCount").value(23))
                 .andExpect(jsonPath("$.data.districts[0].facilitiesPerThousand").value(1.6))
                 .andExpect(jsonPath("$.data.districts[2].facilitiesPerThousand").value(0.3));
+    }
+
+    private static final String BAEKAM = "4146135000";
+
+    @Test
+    void 읍면동_상세는_구_요약과_읍면동별_수를_참여_기회가_적은_순으로_준다() throws Exception {
+        String token = token();
+        String before = mockMvc.perform(get("/api/v1/regions/districts/CHEOIN").param("month", MONTH).header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getContentAsString();
+
+        Venue baekam = venueRepository.save(Venue.builder().name("백암 테스트 장소 " + UUID.randomUUID())
+                .district(District.CHEOIN).emdCode(BAEKAM).build());
+        program(baekam, ProgramStatus.OPEN, LocalDateTime.of(2099, 6, 3, 10, 0));
+
+        String after = mockMvc.perform(get("/api/v1/regions/districts/CHEOIN").param("month", MONTH).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary.name").value("처인구"))
+                .andExpect(jsonPath("$.data.summary.registeredDisabled").value(13964))
+                .andExpect(jsonPath("$.data.emds.length()").value(13))
+                .andReturn().getResponse().getContentAsString();
+
+        List<Number> beforeCount = JsonPath.read(before, "$.data.emds[?(@.emdCode=='" + BAEKAM + "')].programCount");
+        List<Number> afterCount = JsonPath.read(after, "$.data.emds[?(@.emdCode=='" + BAEKAM + "')].programCount");
+        assertThat(afterCount.get(0).longValue() - beforeCount.get(0).longValue()).isEqualTo(1);
+        List<String> names = JsonPath.read(after, "$.data.emds[*].emdName");
+        assertThat(names).contains("백암면", "양지읍", "이동읍").doesNotContain("이동면", "양지면");
+        List<Number> programs = JsonPath.read(after, "$.data.emds[*].programCount");
+        assertThat(programs.stream().map(Number::longValue).toList()).isSorted();
+        List<Number> facilities = JsonPath.read(after, "$.data.emds[*].facilityCount");
+        assertThat(facilities.stream().mapToInt(Number::intValue).sum()).isEqualTo(23);
+    }
+
+    @Test
+    void 좌표만_있는_장소에_행정동_코드를_채운다() {
+        Venue venue = venueRepository.save(Venue.builder().name("행정동 테스트 장소 " + UUID.randomUUID())
+                .location(GeoPoints.of(37.17, 127.37)).build());
+        given(kakaoLocalClient.isEnabled()).willReturn(true);
+        given(kakaoLocalClient.findAdministrativeDongCode(anyDouble(), anyDouble())).willReturn(Optional.of(BAEKAM));
+
+        venueEmdFiller.fill();
+
+        assertThat(venueRepository.findById(venue.getId()).orElseThrow().getEmdCode()).isEqualTo(BAEKAM);
+    }
+
+    @Test
+    void 없는_구면_400() throws Exception {
+        mockMvc.perform(get("/api/v1/regions/districts/SEOUL").header("Authorization", "Bearer " + token()))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

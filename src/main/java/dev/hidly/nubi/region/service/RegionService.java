@@ -3,8 +3,10 @@ package dev.hidly.nubi.region.service;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.organization.data.enums.District;
 import dev.hidly.nubi.program.data.repository.ProgramSpecifications;
+import dev.hidly.nubi.region.data.dto.response.DistrictDetailResponseDto;
 import dev.hidly.nubi.region.data.dto.response.DistrictStatResponseDto;
 import dev.hidly.nubi.region.data.dto.response.DistrictStatsResponseDto;
+import dev.hidly.nubi.region.data.dto.response.EmdStatResponseDto;
 import dev.hidly.nubi.region.data.entity.RegionStat;
 import dev.hidly.nubi.region.data.repository.RegionStatRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,23 +25,51 @@ import java.util.stream.Collectors;
 public class RegionService {
     private final RegionStatRepository regionStatRepository;
 
+    private record Period(YearMonth month, LocalDateTime from, LocalDateTime to) {
+        static Period of(YearMonth month) {
+            YearMonth target = month == null ? YearMonth.now() : month;
+            return new Period(target, target.atDay(1).atStartOfDay(), target.plusMonths(1).atDay(1).atStartOfDay());
+        }
+    }
+
     @Transactional(readOnly = true)
     public GlobalResponse<DistrictStatsResponseDto> getDistricts(YearMonth month) {
-        YearMonth target = month == null ? YearMonth.now() : month;
-        LocalDateTime from = target.atDay(1).atStartOfDay();
-        LocalDateTime to = target.plusMonths(1).atDay(1).atStartOfDay();
-
+        Period period = Period.of(month);
         Map<District, Long> programs = toMap(regionStatRepository.countProgramsByDistrict(
-                ProgramSpecifications.SEARCHABLE_STATUSES, from, to));
+                ProgramSpecifications.SEARCHABLE_STATUSES, period.from(), period.to()));
         Map<District, Long> accessible = toMap(regionStatRepository.countAccessibleProgramsByDistrict(
-                ProgramSpecifications.SEARCHABLE_STATUSES, ProgramSpecifications.ACCESSIBILITY_FACILITIES, from, to));
+                ProgramSpecifications.SEARCHABLE_STATUSES, ProgramSpecifications.ACCESSIBILITY_FACILITIES, period.from(), period.to()));
 
         List<DistrictStatResponseDto> districts = regionStatRepository.findAllByEmdCodeIsNull().stream()
                 .sorted(Comparator.comparing(RegionStat::getDistrict))
                 .map(stat -> toDto(stat, programs.getOrDefault(stat.getDistrict(), 0L),
                         accessible.getOrDefault(stat.getDistrict(), 0L)))
                 .toList();
-        return GlobalResponse.ok(new DistrictStatsResponseDto(target, districts));
+        return GlobalResponse.ok(new DistrictStatsResponseDto(period.month(), districts));
+    }
+
+    @Transactional(readOnly = true)
+    public GlobalResponse<DistrictDetailResponseDto> getDistrict(District district, YearMonth month) {
+        Period period = Period.of(month);
+        DistrictStatResponseDto summary = getDistricts(period.month()).getData().districts().stream()
+                .filter(stat -> stat.district() == district)
+                .findFirst()
+                .orElseThrow();
+
+        Map<String, Long> programs = toMap(regionStatRepository.countProgramsByEmd(
+                ProgramSpecifications.SEARCHABLE_STATUSES, period.from(), period.to()));
+        Map<String, Long> accessible = toMap(regionStatRepository.countAccessibleProgramsByEmd(
+                ProgramSpecifications.SEARCHABLE_STATUSES, ProgramSpecifications.ACCESSIBILITY_FACILITIES, period.from(), period.to()));
+
+        List<EmdStatResponseDto> emds = regionStatRepository.findAllByDistrictAndEmdCodeIsNotNull(district).stream()
+                .map(stat -> new EmdStatResponseDto(stat.getEmdCode(), stat.getEmdName(), stat.getFacilityCount(),
+                        stat.getRegisteredDisabled(), programs.getOrDefault(stat.getEmdCode(), 0L),
+                        accessible.getOrDefault(stat.getEmdCode(), 0L)))
+                .sorted(Comparator.comparingLong(EmdStatResponseDto::programCount)
+                        .thenComparing(Comparator.comparingInt(EmdStatResponseDto::facilityCount).reversed())
+                        .thenComparing(EmdStatResponseDto::emdName))
+                .toList();
+        return GlobalResponse.ok(new DistrictDetailResponseDto(period.month(), summary, emds));
     }
 
     private static DistrictStatResponseDto toDto(RegionStat stat, long programCount, long accessibleProgramCount) {
@@ -52,8 +82,9 @@ public class RegionService {
                 programCount, accessibleProgramCount, programsPerFacility);
     }
 
-    private static Map<District, Long> toMap(List<Object[]> rows) {
-        return rows.stream().collect(Collectors.toMap(row -> (District) row[0], row -> (Long) row[1]));
+    @SuppressWarnings("unchecked")
+    private static <K> Map<K, Long> toMap(List<Object[]> rows) {
+        return rows.stream().collect(Collectors.toMap(row -> (K) row[0], row -> (Long) row[1]));
     }
 
     private static double round1(double value) {
