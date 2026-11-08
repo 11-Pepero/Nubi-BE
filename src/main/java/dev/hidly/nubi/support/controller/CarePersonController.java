@@ -45,7 +45,7 @@ public class CarePersonController {
     }
 
     @GetMapping("/{careId}")
-    @Operation(summary = "개별 케어 상세", description = "케어 항목과 참여 판정 반영 여부")
+    @Operation(summary = "개별 케어 상세", description = "케어 항목과 판정 영향. judgementImpact에 이 사람 때문에 판정이 달라지는 공개 중 프로그램(최대 20개)이 나옵니다.")
     public GlobalResponse<CarePersonResponseDto> getCarePerson(@PathVariable Long careId) {
         return carePersonService.getCarePerson(careId);
     }

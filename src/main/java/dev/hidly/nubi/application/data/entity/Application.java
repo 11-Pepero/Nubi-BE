@@ -1,6 +1,7 @@
 package dev.hidly.nubi.application.data.entity;
 
 import dev.hidly.nubi.application.data.enums.ApplicationStatus;
+import dev.hidly.nubi.application.data.exception.InvalidApplicationStatusException;
 import dev.hidly.nubi.common.jpa.BaseTimeEntity;
 import dev.hidly.nubi.organization.data.entity.Organization;
 import dev.hidly.nubi.program.data.entity.Program;
@@ -100,6 +101,45 @@ public class Application extends BaseTimeEntity {
                 .status(ApplicationStatus.SUBMITTED)
                 .submittedAt(LocalDateTime.now())
                 .build();
+    }
+
+    // 외부 공고 신청 준비: 접수 전이라 submittedAt은 비워 두고, 채널은 공고의 접수 방법을 따른다.
+    public static Application prepare(Program program, Organization applicant, SupportGroup group,
+                                      int participantCount, int companionCount) {
+        return Application.builder()
+                .program(program)
+                .applicantOrganization(applicant)
+                .group(group)
+                .participantCount(participantCount)
+                .companionCount(companionCount)
+                .channel(program.getApplyMethod())
+                .status(ApplicationStatus.PREPARING)
+                .build();
+    }
+
+    // 담당자가 외부에서 직접 접수를 끝냈다고 표시 (PREPARING → SUBMITTED)
+    public void markSubmitted(ApplyMethod channel, LocalDateTime submittedAt) {
+        if (status != ApplicationStatus.PREPARING) {
+            throw new InvalidApplicationStatusException();
+        }
+        if (channel != null) {
+            this.channel = channel;
+        }
+        this.status = ApplicationStatus.SUBMITTED;
+        this.submittedAt = submittedAt;
+    }
+
+    // 주최 기관의 확정·대기·거절. 확정·거절이면 결정 시각을 남기고, 대기로 돌리면 지운다.
+    public void decideByHost(ApplicationStatus next) {
+        if (!status.canBeDecidedByHostAs(next)) {
+            throw new InvalidApplicationStatusException();
+        }
+        this.status = next;
+        this.decidedAt = next == ApplicationStatus.WAITING ? null : LocalDateTime.now();
+    }
+
+    public boolean belongsTo(Long programId) {
+        return program.getId().equals(programId);
     }
 
     public void addSupport(ApplicationSupport support) {

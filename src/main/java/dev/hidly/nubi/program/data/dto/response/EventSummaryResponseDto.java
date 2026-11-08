@@ -1,5 +1,6 @@
 package dev.hidly.nubi.program.data.dto.response;
 
+import dev.hidly.nubi.application.data.repository.EventApplicationStats;
 import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.enums.ProgramCategory;
 import dev.hidly.nubi.program.data.enums.ProgramStatus;
@@ -21,8 +22,8 @@ public record EventSummaryResponseDto(
         int participantCount,
         int newApplicationCount
 ) {
-    // 신청 기관 수, 참여 인원, 새 신청 수는 신청(application) 도메인이 생기면 채운다. 지금은 0.
-    public static EventSummaryResponseDto of(Program program, String thumbnailUrl) {
+    // 신청 기관 수, 참여 인원(이용자), 새 신청 수는 거절·취소를 뺀 신청 기준
+    public static EventSummaryResponseDto of(Program program, String thumbnailUrl, EventApplicationStats stats) {
         return new EventSummaryResponseDto(
                 program.getId(),
                 program.getTitle(),
@@ -34,8 +35,8 @@ public record EventSummaryResponseDto(
                 program.getCapacity(),
                 thumbnailUrl,
                 VenueSummaryResponseDto.from(program.getVenue()),
-                0,
-                0,
-                0);
+                stats.applicantOrgCount().intValue(),
+                stats.participantCount().intValue(),
+                stats.newApplicationCount().intValue());
     }
 }

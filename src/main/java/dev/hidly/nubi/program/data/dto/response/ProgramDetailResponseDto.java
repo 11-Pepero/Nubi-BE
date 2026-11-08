@@ -25,10 +25,16 @@ public record ProgramDetailResponseDto(
         Integer capacity,
         List<ProgramImageResponseDto> images,
         VenueResponseDto venue,
-        List<FacilityResponseDto> facilities
+        List<FacilityResponseDto> facilities,
+        EligibilityResponseDto eligibility
 ) {
     public static ProgramDetailResponseDto of(Program program, List<ProgramImageResponseDto> images,
                                               List<FacilityResponseDto> facilities) {
+        return of(program, images, facilities, null);
+    }
+
+    public static ProgramDetailResponseDto of(Program program, List<ProgramImageResponseDto> images,
+                                              List<FacilityResponseDto> facilities, EligibilityResponseDto eligibility) {
         return new ProgramDetailResponseDto(
                 program.getId(),
                 program.getTitle(),
@@ -46,6 +52,7 @@ public record ProgramDetailResponseDto(
                 program.getCapacity(),
                 images,
                 VenueResponseDto.from(program.getVenue()),
-                facilities);
+                facilities,
+                eligibility);
     }
 }

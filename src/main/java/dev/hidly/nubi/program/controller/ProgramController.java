@@ -42,8 +42,9 @@ public class ProgramController {
     }
 
     @GetMapping("/{programId}")
-    @Operation(summary = "프로그램 상세", description = "사진, 장소, 편의시설. 임시 저장 행사는 주최 기관만 볼 수 있습니다.")
-    public GlobalResponse<ProgramDetailResponseDto> getDetail(@PathVariable Long programId) {
-        return programService.getDetail(programId);
+    @Operation(summary = "프로그램 상세", description = "사진, 장소, 편의시설. groupId를 주면 로그인한 기관의 그룹 기준 참여 판정을 함께 줍니다. 임시 저장 행사는 주최 기관만 볼 수 있습니다.")
+    public GlobalResponse<ProgramDetailResponseDto> getDetail(@PathVariable Long programId,
+                                                              @RequestParam(required = false) Long groupId) {
+        return programService.getDetail(programId, groupId);
     }
 }
