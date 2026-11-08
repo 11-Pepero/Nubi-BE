@@ -38,4 +38,10 @@ public class NotificationController {
     public GlobalResponse<NotificationResponseDto> read(@PathVariable Long notificationId) {
         return notificationService.read(notificationId);
     }
+
+    @PatchMapping("/read-all")
+    @Operation(summary = "모두 읽음", description = "로그인 기관의 안 읽은 알림을 모두 읽음으로 표시합니다. 응답의 unreadCount는 0입니다.")
+    public GlobalResponse<UnreadCountResponseDto> readAll() {
+        return notificationService.readAll();
+    }
 }

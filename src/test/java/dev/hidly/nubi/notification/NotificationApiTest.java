@@ -101,4 +101,22 @@ class NotificationApiTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOTIFICATION_NOT_FOUND"));
     }
+
+    @Test
+    void 모두_읽으면_내_기관_알림만_읽음이_된다() throws Exception {
+        Login me = signUp();
+        Login other = signUp();
+        notify(me.organizationId(), "알림 1");
+        notify(me.organizationId(), "알림 2");
+        notify(other.organizationId(), "다른 기관 알림");
+
+        mockMvc.perform(patch("/api/v1/notifications/read-all").header("Authorization", "Bearer " + me.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.unreadCount").value(0));
+        mockMvc.perform(get("/api/v1/notifications").header("Authorization", "Bearer " + me.accessToken()))
+                .andExpect(jsonPath("$.data.content[0].read").value(true))
+                .andExpect(jsonPath("$.data.content[1].read").value(true));
+        mockMvc.perform(get("/api/v1/notifications/unread-count").header("Authorization", "Bearer " + other.accessToken()))
+                .andExpect(jsonPath("$.data.unreadCount").value(1));
+    }
 }

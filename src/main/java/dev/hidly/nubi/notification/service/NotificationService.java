@@ -17,6 +17,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
@@ -63,5 +65,11 @@ public class NotificationService {
                 .orElseThrow(NotificationNotFoundException::new);
         notification.read();
         return GlobalResponse.ok(NotificationResponseDto.from(notification));
+    }
+
+    @Transactional
+    public GlobalResponse<UnreadCountResponseDto> readAll() {
+        notificationRepository.markAllRead(SecurityUtil.getOrganizationId(), LocalDateTime.now());
+        return GlobalResponse.ok(new UnreadCountResponseDto(0));
     }
 }
