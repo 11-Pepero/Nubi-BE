@@ -2,7 +2,10 @@ package dev.hidly.nubi.application.controller;
 
 import dev.hidly.nubi.application.data.dto.request.DirectApplicationRequestDto;
 import dev.hidly.nubi.application.data.dto.response.ApplicationResponseDto;
+import dev.hidly.nubi.application.data.dto.request.PrepareApplicationRequestDto;
+import dev.hidly.nubi.application.data.dto.request.SubmittedRequestDto;
 import dev.hidly.nubi.application.data.dto.response.MyApplicationCountResponseDto;
+import dev.hidly.nubi.application.data.dto.response.PreparedApplicationResponseDto;
 import dev.hidly.nubi.application.data.dto.response.MyApplicationDetailResponseDto;
 import dev.hidly.nubi.application.data.dto.response.MyApplicationSummaryResponseDto;
 import dev.hidly.nubi.application.data.enums.ApplicationStatus;
@@ -26,6 +29,19 @@ import org.springframework.web.bind.annotation.*;
 public class ApplicationController {
     private final ApplicationService applicationService;
     private final MyApplicationService myApplicationService;
+
+    @PostMapping("/applications/prepare")
+    @Operation(summary = "신청 준비 만들기", description = "외부 공고(신청 방법 ONLINE, PHONE, PAPER)에 낼 신청을 준비 중(PREPARING)으로 만듭니다. 앱은 대신 접수하지 않습니다. 그룹 공통 지원과 개별 케어를 복사해 두고, 접수 채널(연락처, 접수 링크, 마감)을 함께 돌려줍니다.")
+    public GlobalResponse<PreparedApplicationResponseDto> prepare(@Valid @RequestBody PrepareApplicationRequestDto request) {
+        return applicationService.prepare(request);
+    }
+
+    @PatchMapping("/applications/{applicationId}/submitted")
+    @Operation(summary = "접수 완료 표시", description = "담당자가 전화·온라인·서면으로 직접 접수한 뒤 누릅니다. 준비 중(PREPARING) 신청만 접수 기다림(SUBMITTED)으로 바뀝니다. channel과 submittedAt은 비우면 공고의 접수 방법과 지금 시각입니다.")
+    public GlobalResponse<MyApplicationDetailResponseDto> markSubmitted(@PathVariable Long applicationId,
+                                                                        @RequestBody(required = false) SubmittedRequestDto request) {
+        return applicationService.markSubmitted(applicationId, request == null ? new SubmittedRequestDto() : request);
+    }
 
     @GetMapping("/applications")
     @Operation(summary = "내 신청 목록", description = "우리 기관이 낸 신청을 최근 순으로 보여 줍니다. status를 여러 번 보내 탭별로 조회합니다(준비 중 = PREPARING, 접수 기다림 = SUBMITTED, INQUIRY, WAITING, 참여 예정 = CONFIRMED, 다녀왔어요 = ATTENDED). step은 준비 → 접수 → 참여 → 후기 단계 표시용입니다.")
