@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -44,12 +45,19 @@ public class VenueService {
                 .toList();
     }
 
+    public Map<Long, Map<FacilityType, FacilityStatus>> mergeStatusesByVenue(Collection<Long> venueIds) {
+        if (venueIds.isEmpty()) {
+            return Map.of();
+        }
+        return venueFacilityRepository.findAllByVenueIdIn(venueIds).stream()
+                .collect(Collectors.groupingBy(facility -> facility.getVenue().getId(),
+                        Collectors.collectingAndThen(Collectors.groupingBy(VenueFacility::getFacilityType),
+                                byType -> byType.entrySet().stream()
+                                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> mergeStatus(entry.getValue()))))));
+    }
+
     private FacilityResponseDto merge(FacilityType type, List<VenueFacility> facilities) {
-        FacilityStatus status = facilities.stream()
-                .filter(facility -> facility.getStatus() != FacilityStatus.UNKNOWN)
-                .max(Comparator.comparing(VenueFacility::getVerifiedAt, Comparator.nullsFirst(LocalDateTime::compareTo)))
-                .map(VenueFacility::getStatus)
-                .orElse(FacilityStatus.UNKNOWN);
+        FacilityStatus status = mergeStatus(facilities);
 
         List<FacilitySourceResponseDto> sources = facilities.stream()
                 .sorted(Comparator.comparing(VenueFacility::getSource))
@@ -57,5 +65,13 @@ public class VenueService {
                 .toList();
 
         return new FacilityResponseDto(type, status, sources);
+    }
+
+    private FacilityStatus mergeStatus(List<VenueFacility> facilities) {
+        return facilities.stream()
+                .filter(facility -> facility.getStatus() != FacilityStatus.UNKNOWN)
+                .max(Comparator.comparing(VenueFacility::getVerifiedAt, Comparator.nullsFirst(LocalDateTime::compareTo)))
+                .map(VenueFacility::getStatus)
+                .orElse(FacilityStatus.UNKNOWN);
     }
 }

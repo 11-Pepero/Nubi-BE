@@ -3,6 +3,8 @@ package dev.hidly.nubi.support.service;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.organization.data.repository.OrganizationRepository;
+import dev.hidly.nubi.program.service.EligibilityService;
+import dev.hidly.nubi.program.service.EligibilityService.ResultCount;
 import dev.hidly.nubi.support.data.dto.request.GroupRequestDto;
 import dev.hidly.nubi.support.data.dto.request.GroupSupportRequestDto;
 import dev.hidly.nubi.support.data.dto.response.GroupResponseDto;
@@ -38,16 +40,20 @@ import java.util.stream.Collectors;
 public class GroupService {
     private final SupportGroupRepository supportGroupRepository;
     private final CarePersonRepository carePersonRepository;
+    private final EligibilityService eligibilityService;
     private final SupportTagRepository supportTagRepository;
     private final OrganizationRepository organizationRepository;
 
     @Transactional(readOnly = true)
     public GlobalResponse<List<GroupResponseDto>> getGroups() {
-        List<SupportGroup> groups = supportGroupRepository.findActiveWithSupports(SecurityUtil.getOrganizationId());
+        Long organizationId = SecurityUtil.getOrganizationId();
+        List<SupportGroup> groups = supportGroupRepository.findActiveWithSupports(organizationId);
         Map<Long, Long> careCounts = countCarePersons(groups.stream().map(SupportGroup::getId).toList());
+        Map<Long, ResultCount> resultCounts = eligibilityService.countResults(groups, organizationId);
 
         return GlobalResponse.ok(groups.stream()
-                .map(group -> GroupResponseDto.of(group, careCounts.getOrDefault(group.getId(), 0L)))
+                .map(group -> GroupResponseDto.of(group, careCounts.getOrDefault(group.getId(), 0L),
+                        resultCounts.getOrDefault(group.getId(), ResultCount.EMPTY)))
                 .toList());
     }
 
@@ -63,14 +69,15 @@ public class GroupService {
         toGroupSupports(request).forEach(group::addSupport);
 
         supportGroupRepository.save(group);
+        eligibilityService.recompute(group);
         log.info("[createGroup] 그룹 생성: organizationId={}, groupId={}", organizationId, group.getId());
 
-        return GlobalResponse.ok(GroupResponseDto.of(group, 0));
+        return GlobalResponse.ok(toResponse(group));
     }
 
     @Transactional(readOnly = true)
     public GlobalResponse<GroupResponseDto> getGroup(Long groupId) {
-        return GlobalResponse.ok(withCareCount(getOwnedGroup(groupId)));
+        return GlobalResponse.ok(toResponse(getOwnedGroup(groupId)));
     }
 
     @Transactional
@@ -80,9 +87,10 @@ public class GroupService {
         group.update(request.getName().trim(), request.getMemberCount());
         group.replaceSupports(toGroupSupports(request));
         supportGroupRepository.flush();
+        eligibilityService.recompute(group);
         log.info("[updateGroup] 그룹 수정: groupId={}", groupId);
 
-        return GlobalResponse.ok(withCareCount(group));
+        return GlobalResponse.ok(toResponse(group));
     }
 
     @Transactional
@@ -122,8 +130,11 @@ public class GroupService {
         return GlobalResponse.ok(new GroupSummaryResponseDto(groups.size(), memberCount, supports));
     }
 
-    private GroupResponseDto withCareCount(SupportGroup group) {
-        return GroupResponseDto.of(group, countCarePersons(List.of(group.getId())).getOrDefault(group.getId(), 0L));
+    private GroupResponseDto toResponse(SupportGroup group) {
+        long careCount = countCarePersons(List.of(group.getId())).getOrDefault(group.getId(), 0L);
+        ResultCount resultCount = eligibilityService.countResults(List.of(group), group.getOrganization().getId())
+                .getOrDefault(group.getId(), ResultCount.EMPTY);
+        return GroupResponseDto.of(group, careCount, resultCount);
     }
 
     private Map<Long, Long> countCarePersons(List<Long> groupIds) {
