@@ -1,6 +1,8 @@
 spring:
   application:
     name: Nubi
+  config:
+    import: optional:file:./local-secret.properties
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
   datasource:
@@ -24,3 +26,16 @@ file:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+external:
+  data-go-kr:
+    service-key: ${DATA_GO_KR_SERVICE_KEY:}
+  kakao:
+    rest-api-key: ${KAKAO_REST_API_KEY:}
+
+collect:
+  enabled: ${COLLECT_ENABLED:false}
+  run-on-startup: ${COLLECT_RUN_ON_STARTUP:false}
+  cron: ${COLLECT_CRON:0 0 5 * * *}
+  calendar-months: 3
+  request-delay-ms: 1000
