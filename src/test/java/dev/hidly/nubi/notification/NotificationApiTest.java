@@ -63,4 +63,16 @@ class NotificationApiTest {
                 .andExpect(jsonPath("$.data.content[0].targetType").value("APPLICATION"))
                 .andExpect(jsonPath("$.data.content[0].read").value(false));
     }
+
+    @Test
+    void 안_읽은_알림_수를_센다() throws Exception {
+        Login me = signUp();
+        notify(me.organizationId(), "알림 1");
+        notify(me.organizationId(), "알림 2");
+        notify(signUp().organizationId(), "다른 기관 알림");
+
+        mockMvc.perform(get("/api/v1/notifications/unread-count").header("Authorization", "Bearer " + me.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.unreadCount").value(2));
+    }
 }

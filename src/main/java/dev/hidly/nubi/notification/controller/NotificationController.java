@@ -3,6 +3,7 @@ package dev.hidly.nubi.notification.controller;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.notification.data.dto.response.NotificationResponseDto;
+import dev.hidly.nubi.notification.data.dto.response.UnreadCountResponseDto;
 import dev.hidly.nubi.notification.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,5 +25,11 @@ public class NotificationController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return notificationService.getMyNotifications(page, size);
+    }
+
+    @GetMapping("/unread-count")
+    @Operation(summary = "안 읽은 알림 수", description = "알림 벨에 표시할 안 읽은 알림 개수입니다.")
+    public GlobalResponse<UnreadCountResponseDto> getUnreadCount() {
+        return notificationService.getUnreadCount();
     }
 }

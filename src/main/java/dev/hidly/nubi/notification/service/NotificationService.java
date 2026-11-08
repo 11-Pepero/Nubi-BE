@@ -4,6 +4,7 @@ import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.notification.data.dto.response.NotificationResponseDto;
+import dev.hidly.nubi.notification.data.dto.response.UnreadCountResponseDto;
 import dev.hidly.nubi.notification.data.entity.Notification;
 import dev.hidly.nubi.notification.data.enums.NotificationTargetType;
 import dev.hidly.nubi.notification.data.enums.NotificationType;
@@ -46,5 +47,11 @@ public class NotificationService {
                 notificationRepository.findAllByOrganizationId(SecurityUtil.getOrganizationId(),
                                 PageRequest.of(page, size, LATEST_FIRST))
                         .map(NotificationResponseDto::from)));
+    }
+
+    @Transactional(readOnly = true)
+    public GlobalResponse<UnreadCountResponseDto> getUnreadCount() {
+        return GlobalResponse.ok(new UnreadCountResponseDto(
+                notificationRepository.countByOrganizationIdAndReadAtIsNull(SecurityUtil.getOrganizationId())));
     }
 }
