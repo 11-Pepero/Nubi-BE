@@ -35,6 +35,7 @@ public enum ErrorCode {
     APPLICATION_DUPLICATED("이 그룹은 이미 이 행사에 신청했습니다.", 409),
     CAPACITY_EXCEEDED("행사 정원을 넘어 신청할 수 없습니다.", 409),
     REVIEW_DUPLICATED("이 신청에는 이미 후기를 남겼습니다.", 409),
+    REVIEW_REPLY_DUPLICATED("이 후기에는 이미 답글을 남겼습니다.", 409),
     UNSUPPORTED_MEDIA_TYPE("지원하지 않는 요청 형식입니다.", 415),
     TOO_MANY_REQUESTS("요청 한도를 초과했습니다.", 429),
     INTERNAL_ERROR("서버 오류가 발생했습니다.", 500),

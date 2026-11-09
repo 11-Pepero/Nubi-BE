@@ -2,6 +2,7 @@ package dev.hidly.nubi.review.data.dto.response;
 
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto.CheckItem;
 import dev.hidly.nubi.review.data.entity.Review;
+import dev.hidly.nubi.review.data.entity.ReviewReply;
 import dev.hidly.nubi.review.data.enums.ReviewReaction;
 
 import java.time.LocalDateTime;
@@ -20,9 +21,18 @@ public record ProgramReviewResponseDto(
         String content,
         List<String> imageUrls,
         boolean isPublic,
+        Reply reply,
         LocalDateTime createdAt
 ) {
-    public static ProgramReviewResponseDto of(Review review, List<String> imageUrls) {
+    // 주최 기관의 답글. 없으면 reply가 null
+    public record Reply(String organizationName, String content, LocalDateTime createdAt) {
+        public static Reply from(ReviewReply reply) {
+            return reply == null ? null
+                    : new Reply(reply.getOrganization().getName(), reply.getContent(), reply.getCreatedAt());
+        }
+    }
+
+    public static ProgramReviewResponseDto of(Review review, List<String> imageUrls, ReviewReply reply) {
         return new ProgramReviewResponseDto(
                 review.getId(),
                 review.getAuthorOrganization().getName(),
@@ -35,6 +45,7 @@ public record ProgramReviewResponseDto(
                 review.getContent(),
                 imageUrls,
                 review.isPublic(),
+                Reply.from(reply),
                 review.getCreatedAt());
     }
 }

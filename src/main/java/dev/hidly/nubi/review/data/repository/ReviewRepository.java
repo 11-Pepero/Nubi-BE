@@ -34,6 +34,11 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("select count(r), avg(r.rating) from Review r where r.program.id = :programId")
     List<Object[]> countAndAverageRating(@Param("programId") Long programId);
 
+    // 답글 기다림: 주최 기관이 아직 답글을 안 단 후기 수
+    @Query("select count(r) from Review r where r.program.id = :programId "
+            + "and not exists (select 1 from ReviewReply rr where rr.review = r)")
+    long countAwaitingReply(@Param("programId") Long programId);
+
     // 지원 항목별 [지원 항목 ID, 코드, 이름, 답, 수]
     @Query("""
             select c.supportTag.id, c.supportTag.code, c.supportTag.label, c.answer, count(c)

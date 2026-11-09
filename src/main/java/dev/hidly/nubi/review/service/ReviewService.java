@@ -26,6 +26,7 @@ import dev.hidly.nubi.review.data.dto.response.ReceivedReviewsResponseDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
 import dev.hidly.nubi.review.data.entity.Review;
 import dev.hidly.nubi.review.data.entity.ReviewImage;
+import dev.hidly.nubi.review.data.entity.ReviewReply;
 import dev.hidly.nubi.review.data.enums.CheckAnswer;
 import dev.hidly.nubi.review.data.enums.ReviewReaction;
 import dev.hidly.nubi.review.data.enums.ReviewSort;
@@ -35,6 +36,7 @@ import dev.hidly.nubi.review.data.exception.ReviewDuplicatedException;
 import dev.hidly.nubi.review.data.exception.ReviewNotAllowedException;
 import dev.hidly.nubi.review.data.exception.ReviewNotFoundException;
 import dev.hidly.nubi.review.data.repository.ReviewImageRepository;
+import dev.hidly.nubi.review.data.repository.ReviewReplyRepository;
 import dev.hidly.nubi.review.data.repository.ReviewRepository;
 import dev.hidly.nubi.support.data.entity.SupportTag;
 import dev.hidly.nubi.support.data.exception.SupportTagNotFoundException;
@@ -70,6 +72,7 @@ public class ReviewService {
     private final ProgramRepository programRepository;
     private final NotificationService notificationService;
     private final ReviewImageRepository reviewImageRepository;
+    private final ReviewReplyRepository reviewReplyRepository;
 
     @Transactional
     public GlobalResponse<ReviewResponseDto> create(Long applicationId, ReviewRequestDto request) {
@@ -145,7 +148,7 @@ public class ReviewService {
                 .orElseThrow(ProgramNotFoundException::new);
         Page<Review> reviews = reviewRepository.findAllByProgramIdAndIsPublicTrue(programId,
                 PageRequest.of(page, size, ReviewSort.LATEST.toSort()));
-        return GlobalResponse.ok(withImages(reviews));
+        return GlobalResponse.ok(withImagesAndReplies(reviews));
     }
 
     // 주최 기관이 받은 후기(화면 16): 공개·비공개 모두와 위쪽 숫자, 지원 항목별·반응별 집계
@@ -164,7 +167,8 @@ public class ReviewService {
         ReceivedReviewsResponseDto.Stats stats = new ReceivedReviewsResponseDto.Stats(
                 ((Number) people[0]).longValue(), ((Number) people[1]).longValue(), ((Number) people[2]).longValue(),
                 ((Number) ratings[0]).longValue(),
-                ratings[1] == null ? null : Math.round(((Number) ratings[1]).doubleValue() * 10) / 10.0);
+                ratings[1] == null ? null : Math.round(((Number) ratings[1]).doubleValue() * 10) / 10.0,
+                reviewRepository.countAwaitingReply(eventId));
 
         Map<Long, ReceivedReviewsResponseDto.CheckStat> checks = new LinkedHashMap<>();
         for (Object[] row : reviewRepository.countChecks(eventId)) {
@@ -185,17 +189,22 @@ public class ReviewService {
 
         Page<Review> reviews = reviewRepository.findReceived(eventId, photoOnly, PageRequest.of(page, size, sort.toSort()));
         return GlobalResponse.ok(new ReceivedReviewsResponseDto(stats, List.copyOf(checks.values()), reactions,
-                withImages(reviews)));
+                withImagesAndReplies(reviews)));
     }
 
-    private PageResponse<ProgramReviewResponseDto> withImages(Page<Review> reviews) {
+    // 목록에 사진과 답글을 붙인다. 후기마다 따로 조회하지 않고 한 페이지 분을 한 번에 가져온다.
+    private PageResponse<ProgramReviewResponseDto> withImagesAndReplies(Page<Review> reviews) {
         List<Long> reviewIds = reviews.map(Review::getId).getContent();
-        Map<Long, List<String>> imageUrls = reviewIds.isEmpty() ? Map.of()
-                : reviewImageRepository.findAllByReviewIdInOrderBySortOrderAsc(reviewIds).stream()
+        if (reviewIds.isEmpty()) {
+            return PageResponse.from(reviews.map(review -> ProgramReviewResponseDto.of(review, List.of(), null)));
+        }
+        Map<Long, List<String>> imageUrls = reviewImageRepository.findAllByReviewIdInOrderBySortOrderAsc(reviewIds).stream()
                 .collect(Collectors.groupingBy(image -> image.getReview().getId(),
                         Collectors.mapping(ReviewImage::getUrl, Collectors.toList())));
-        return PageResponse.from(reviews.map(review ->
-                ProgramReviewResponseDto.of(review, imageUrls.getOrDefault(review.getId(), List.of()))));
+        Map<Long, ReviewReply> replies = reviewReplyRepository.findAllByReviewIdIn(reviewIds).stream()
+                .collect(Collectors.toMap(reply -> reply.getReview().getId(), Function.identity()));
+        return PageResponse.from(reviews.map(review -> ProgramReviewResponseDto.of(review,
+                imageUrls.getOrDefault(review.getId(), List.of()), replies.get(review.getId()))));
     }
 
     // 같은 프로그램의 후기 쓰기·수정을 한 줄로 세운다. 같은 신청에 후기가 두 번 들어가거나,

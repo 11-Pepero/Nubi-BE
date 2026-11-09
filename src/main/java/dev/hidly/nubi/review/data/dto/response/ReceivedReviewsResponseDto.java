@@ -14,7 +14,7 @@ public record ReceivedReviewsResponseDto(
 ) {
     // averageRating은 후기가 없으면 null
     public record Stats(long organizationCount, long participantCount, long companionCount,
-                        long reviewCount, Double averageRating) {
+                        long reviewCount, Double averageRating, long awaitingReplyCount) {
     }
 
     public record CheckStat(Long supportTagId, String code, String label, long yesCount, long noCount, long unknownCount) {

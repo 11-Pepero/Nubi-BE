@@ -386,6 +386,55 @@ class ReviewApiTest {
                 .andExpect(jsonPath("$.error.code").value("PROGRAM_ACCESS_DENIED"));
     }
 
+    private ResultActions replyTo(Login login, long reviewId, String content) throws Exception {
+        return mockMvc.perform(post("/api/v1/reviews/{reviewId}/reply", reviewId)
+                .header("Authorization", "Bearer " + login.accessToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"content":"%s"}
+                        """.formatted(content)));
+    }
+
+    @Test
+    void 주최_기관이_답글을_달면_두_후기_목록에_보이고_답글_기다림이_줄어든다() throws Exception {
+        Login host = signUp();
+        Login applicant = signUp();
+        Application application = application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+        long eventId = application.getProgram().getId();
+        long reviewId = review(applicant, application);
+
+        mockMvc.perform(get("/api/v1/events/{eventId}/reviews", eventId).header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(jsonPath("$.data.stats.awaitingReplyCount").value(1))
+                .andExpect(jsonPath("$.data.reviews.content[0].reply").doesNotExist());
+
+        replyTo(applicant, reviewId, "제가 쓴 후기에 답글").andExpect(status().isForbidden());
+        replyTo(host, reviewId, "  다음 행사부터 그늘막을 두 개 더 둘게요.  ")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reviewId").value(reviewId))
+                .andExpect(jsonPath("$.data.content").value("다음 행사부터 그늘막을 두 개 더 둘게요."));
+        replyTo(host, reviewId, "한 번 더")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("REVIEW_REPLY_DUPLICATED"));
+
+        mockMvc.perform(get("/api/v1/events/{eventId}/reviews", eventId).header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(jsonPath("$.data.stats.awaitingReplyCount").value(0))
+                .andExpect(jsonPath("$.data.reviews.content[0].reply.content").value("다음 행사부터 그늘막을 두 개 더 둘게요."));
+        mockMvc.perform(get("/api/v1/programs/{programId}/reviews", eventId).header("Authorization", "Bearer " + applicant.accessToken()))
+                .andExpect(jsonPath("$.data.content[0].reply.organizationName").value("용인 주간활동센터"));
+    }
+
+    @Test
+    void 빈_답글이나_없는_후기는_400_404() throws Exception {
+        Login host = signUp();
+        Login applicant = signUp();
+        long reviewId = review(applicant, application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED));
+
+        replyTo(host, reviewId, "   ").andExpect(status().isBadRequest());
+        replyTo(host, 999_999_999L, "답글")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("REVIEW_NOT_FOUND"));
+    }
+
     @Test
     void 받은_후기가_없으면_평균_별점은_null() throws Exception {
         Login host = signUp();
