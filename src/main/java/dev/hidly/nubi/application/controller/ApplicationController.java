@@ -2,6 +2,8 @@ package dev.hidly.nubi.application.controller;
 
 import dev.hidly.nubi.application.data.dto.request.DirectApplicationRequestDto;
 import dev.hidly.nubi.application.data.dto.response.ApplicationResponseDto;
+import dev.hidly.nubi.application.data.dto.request.CancelRequestDto;
+import dev.hidly.nubi.application.data.dto.request.MessageRequestDto;
 import dev.hidly.nubi.application.data.dto.request.PrepareApplicationRequestDto;
 import dev.hidly.nubi.application.data.dto.request.SubmittedRequestDto;
 import dev.hidly.nubi.application.data.dto.response.MyApplicationCountResponseDto;
@@ -41,6 +43,20 @@ public class ApplicationController {
     public GlobalResponse<MyApplicationDetailResponseDto> markSubmitted(@PathVariable Long applicationId,
                                                                         @RequestBody(required = false) SubmittedRequestDto request) {
         return applicationService.markSubmitted(applicationId, request == null ? new SubmittedRequestDto() : request);
+    }
+
+    @PostMapping("/applications/{applicationId}/messages")
+    @Operation(summary = "문의 보내기", description = "우리 기관 신청에 대해 주최 기관에 문의를 남깁니다. 접수 기다림(SUBMITTED) 신청은 문의 있음(INQUIRY)으로 바뀝니다. 취소된 신청에는 보낼 수 없습니다.")
+    public GlobalResponse<MyApplicationDetailResponseDto> sendInquiry(@PathVariable Long applicationId,
+                                                                      @Valid @RequestBody MessageRequestDto request) {
+        return applicationService.sendInquiry(applicationId, request);
+    }
+
+    @PatchMapping("/applications/{applicationId}/cancel")
+    @Operation(summary = "신청 취소", description = "행사가 시작하기 전까지 취소할 수 있습니다. 거절·취소·다녀옴 상태는 취소할 수 없습니다. reason을 보내면 신청 기관 메시지로 남깁니다.")
+    public GlobalResponse<MyApplicationDetailResponseDto> cancel(@PathVariable Long applicationId,
+                                                                 @Valid @RequestBody(required = false) CancelRequestDto request) {
+        return applicationService.cancel(applicationId, request == null ? new CancelRequestDto() : request);
     }
 
     @GetMapping("/applications")

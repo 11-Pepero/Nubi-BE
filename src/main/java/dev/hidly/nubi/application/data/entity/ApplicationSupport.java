@@ -44,6 +44,12 @@ public class ApplicationSupport extends BaseTimeEntity {
         this.prepStatus = PrepStatus.PENDING;
     }
 
+    // 주최 기관의 지원 준비 체크 (화면 13). 메모를 비우면 지운다.
+    public void updatePrep(PrepStatus prepStatus, String hostNote) {
+        this.prepStatus = prepStatus;
+        this.hostNote = hostNote == null || hostNote.isBlank() ? null : hostNote.trim();
+    }
+
     void assignApplication(Application application) {
         this.application = application;
     }

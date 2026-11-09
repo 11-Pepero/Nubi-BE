@@ -1,6 +1,9 @@
 package dev.hidly.nubi.application.service;
 
+import dev.hidly.nubi.application.data.dto.request.CancelRequestDto;
 import dev.hidly.nubi.application.data.dto.request.DirectApplicationRequestDto;
+import dev.hidly.nubi.application.data.dto.request.MessageRequestDto;
+import dev.hidly.nubi.application.data.exception.InvalidApplicationStatusException;
 import dev.hidly.nubi.application.data.dto.request.PrepareApplicationRequestDto;
 import dev.hidly.nubi.application.data.dto.request.SubmittedRequestDto;
 import dev.hidly.nubi.application.data.dto.response.ApplicationResponseDto;
@@ -151,6 +154,48 @@ public class ApplicationService {
         log.info("[markSubmitted] 접수 완료: applicationId={}, channel={}", applicationId, application.getChannel());
 
         return GlobalResponse.ok(MyApplicationDetailResponseDto.from(application));
+    }
+
+    // 문의 보내기 (API-33): 신청 기관 → 주최. 접수 기다림이면 "문의 있음"으로 바뀐다.
+    @Transactional
+    public GlobalResponse<MyApplicationDetailResponseDto> sendInquiry(Long applicationId, MessageRequestDto request) {
+        Application application = getOwnApplication(applicationId);
+        if (!application.acceptsMessages()) {
+            throw new InvalidApplicationStatusException();
+        }
+        application.addMessage(ApplicationMessage.builder()
+                .senderOrganization(application.getApplicantOrganization())
+                .body(request.getBody().trim())
+                .build());
+        application.markInquiry();
+        applicationRepository.flush();
+        log.info("[sendInquiry] 문의: applicationId={}, status={}", applicationId, application.getStatus());
+        return GlobalResponse.ok(MyApplicationDetailResponseDto.from(application));
+    }
+
+    // 신청 취소 (API-32): 참여 전까지. 사유는 신청 기관 메시지로 남긴다.
+    @Transactional
+    public GlobalResponse<MyApplicationDetailResponseDto> cancel(Long applicationId, CancelRequestDto request) {
+        Application application = getOwnApplication(applicationId);
+        application.cancelByApplicant(LocalDateTime.now());
+        if (request.getReason() != null && !request.getReason().isBlank()) {
+            application.addMessage(ApplicationMessage.builder()
+                    .senderOrganization(application.getApplicantOrganization())
+                    .body(request.getReason().trim())
+                    .build());
+        }
+        applicationRepository.flush();
+        log.info("[cancelApplication] 신청 취소: applicationId={}", applicationId);
+        return GlobalResponse.ok(MyApplicationDetailResponseDto.from(application));
+    }
+
+    private Application getOwnApplication(Long applicationId) {
+        Application application = applicationRepository.findWithProgramById(applicationId)
+                .orElseThrow(ApplicationNotFoundException::new);
+        if (!application.isAppliedBy(SecurityUtil.getOrganizationId())) {
+            throw new ApplicationAccessDeniedException();
+        }
+        return application;
     }
 
     private void validatePreparable(Program program, Long organizationId) {
