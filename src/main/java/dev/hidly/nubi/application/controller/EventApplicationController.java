@@ -6,7 +6,13 @@ import dev.hidly.nubi.application.data.dto.request.SupportPrepRequestDto;
 import dev.hidly.nubi.application.data.dto.response.EventApplicationDetailResponseDto;
 import dev.hidly.nubi.application.data.dto.response.EventApplicationListResponseDto;
 import dev.hidly.nubi.application.data.enums.ApplicationStatus;
+import dev.hidly.nubi.application.service.ApplicationExportService;
 import dev.hidly.nubi.application.service.EventApplicationService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import java.nio.charset.StandardCharsets;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,6 +30,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EventApplicationController {
     private final EventApplicationService eventApplicationService;
+    private final ApplicationExportService applicationExportService;
 
     @GetMapping
     @Operation(summary = "신청 기관 목록", description = "주최 기관만 볼 수 있습니다. status를 여러 번 보내면 함께 조회합니다(새 신청 = SUBMITTED, 문의 있음 = INQUIRY, 확정 = CONFIRMED). 위쪽 숫자(이용자, 동반 인력, 새 신청)는 거절·취소를 뺀 신청 기준이고, statusCounts는 탭별 건수입니다.")
@@ -33,6 +40,19 @@ public class EventApplicationController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return eventApplicationService.getApplications(eventId, status, page, size);
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "신청 명단 내려받기", description = "주최 기관만 내려받을 수 있는 엑셀(xlsx) 파일입니다. '신청 기관' 시트(기관, 그룹, 담당자, 연락처, 인원, 오는 방법, 필요한 지원, 상태)와 '개별 케어' 시트(별칭, 케어 내용)가 있습니다. status를 비우면 거절·취소를 뺀 신청, 보내면 그 상태만 담습니다. format은 xlsx만 됩니다.")
+    public ResponseEntity<byte[]> export(@PathVariable Long eventId,
+                                         @RequestParam(defaultValue = ApplicationExportService.XLSX) String format,
+                                         @RequestParam(required = false) List<ApplicationStatus> status) {
+        ApplicationExportService.ExportFile file = applicationExportService.export(eventId, format, status);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(file.fileName(), StandardCharsets.UTF_8).build().toString())
+                .body(file.content());
     }
 
     @GetMapping("/{applicationId}")

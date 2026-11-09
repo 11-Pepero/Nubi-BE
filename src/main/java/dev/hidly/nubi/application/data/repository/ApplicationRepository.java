@@ -128,6 +128,10 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     @EntityGraph(attributePaths = {"applicantOrganization", "group"})
     List<Application> findByProgramIdAndStatusNotInOrderByIdAsc(Long programId, Collection<ApplicationStatus> statuses);
 
+    // 신청 명단 내려받기(API-49): 고른 상태의 신청을 먼저 들어온 순으로
+    @EntityGraph(attributePaths = {"applicantOrganization", "group"})
+    List<Application> findByProgramIdAndStatusInOrderByIdAsc(Long programId, Collection<ApplicationStatus> statuses);
+
     // 신청에는 담당자가 따로 저장되지 않아 기관의 첫 담당자를 연락처로 쓴다.
     @Query("select m from Member m where m.organization.id in :organizationIds order by m.id")
     List<Member> findMembersOfOrganizations(@Param("organizationIds") Collection<Long> organizationIds);
