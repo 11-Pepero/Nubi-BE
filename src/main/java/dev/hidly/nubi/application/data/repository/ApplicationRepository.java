@@ -25,6 +25,30 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     long sumParticipantsExcept(@Param("programId") Long programId,
                                @Param("released") Collection<ApplicationStatus> released);
 
+    @Query("""
+            select coalesce(sum(a.participantCount), 0) from Application a
+            where a.program.id = :programId and a.status not in :released and a.id <> :applicationId
+            """)
+    long sumParticipantsExceptApplication(@Param("programId") Long programId,
+                                          @Param("released") Collection<ApplicationStatus> released,
+                                          @Param("applicationId") Long applicationId);
+
+    @Query("""
+            select a.program.id, coalesce(sum(a.participantCount), 0) from Application a
+            where a.program.id in :programIds and a.status not in :released
+            group by a.program.id
+            """)
+    List<Object[]> sumParticipantsByProgramIds(@Param("programIds") Collection<Long> programIds,
+                                               @Param("released") Collection<ApplicationStatus> released);
+
+    @Query("""
+            select count(a) from Application a
+            where a.applicantOrganization.id = :organizationId and a.status = :status and a.program.startAt >= :from
+            """)
+    long countByApplicantAndStatusStartingAfter(@Param("organizationId") Long organizationId,
+                                                @Param("status") ApplicationStatus status,
+                                                @Param("from") LocalDateTime from);
+
     @EntityGraph(attributePaths = {"applicantOrganization", "group"})
     Page<Application> findByProgramId(Long programId, Pageable pageable);
 
@@ -70,6 +94,27 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
                                                   @Param("status") ApplicationStatus status,
                                                   @Param("from") LocalDateTime from,
                                                   @Param("to") LocalDateTime to);
+
+    // 행사 관리 요약(API-40): 내가 주최한 행사들에 들어온 신청
+    @Query("""
+            select count(a) from Application a
+            where a.program.hostOrganization.id = :organizationId and a.program.deletedAt is null and a.status = :status
+            """)
+    long countForHostByStatus(@Param("organizationId") Long organizationId, @Param("status") ApplicationStatus status);
+
+    @Query("""
+            select coalesce(sum(a.participantCount), 0), coalesce(sum(a.companionCount), 0) from Application a
+            where a.program.hostOrganization.id = :organizationId and a.program.deletedAt is null
+              and a.status = :status and a.program.startAt >= :from and a.program.startAt < :to
+            """)
+    List<Object[]> sumPeopleForHostStartingBetween(@Param("organizationId") Long organizationId,
+                                                   @Param("status") ApplicationStatus status,
+                                                   @Param("from") LocalDateTime from,
+                                                   @Param("to") LocalDateTime to);
+
+    // 필요 지원 모아보기(API-48): 거절·취소를 뺀 신청을 먼저 들어온 순으로
+    @EntityGraph(attributePaths = {"applicantOrganization", "group"})
+    List<Application> findByProgramIdAndStatusNotInOrderByIdAsc(Long programId, Collection<ApplicationStatus> statuses);
 
     // 신청에는 담당자가 따로 저장되지 않아 기관의 첫 담당자를 연락처로 쓴다.
     @Query("select m from Member m where m.organization.id in :organizationIds order by m.id")

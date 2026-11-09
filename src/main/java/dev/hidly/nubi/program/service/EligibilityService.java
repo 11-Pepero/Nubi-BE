@@ -1,5 +1,7 @@
 package dev.hidly.nubi.program.service;
 
+import dev.hidly.nubi.application.data.enums.ApplicationStatus;
+import dev.hidly.nubi.application.data.repository.ApplicationRepository;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.common.security.SecurityUtil;
@@ -7,7 +9,6 @@ import dev.hidly.nubi.program.data.dto.response.EligibilityResponseDto;
 import dev.hidly.nubi.program.data.dto.response.EligibleProgramResponseDto;
 import dev.hidly.nubi.program.data.dto.response.JudgementImpactResponseDto;
 import dev.hidly.nubi.program.data.dto.response.ProgramSummaryResponseDto;
-import dev.hidly.nubi.program.data.entity.Eligibility;
 import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.entity.ProgramCondition;
 import dev.hidly.nubi.program.data.entity.ProgramImage;
@@ -17,7 +18,6 @@ import dev.hidly.nubi.program.data.enums.FacilityType;
 import dev.hidly.nubi.program.data.enums.ItemResult;
 import dev.hidly.nubi.program.data.enums.ProgramStatus;
 import dev.hidly.nubi.program.data.exception.ProgramNotFoundException;
-import dev.hidly.nubi.program.data.repository.EligibilityRepository;
 import dev.hidly.nubi.program.data.repository.ProgramConditionRepository;
 import dev.hidly.nubi.program.data.repository.ProgramImageRepository;
 import dev.hidly.nubi.program.data.repository.ProgramRepository;
@@ -54,7 +54,7 @@ public class EligibilityService {
     private final ProgramRepository programRepository;
     private final ProgramConditionRepository programConditionRepository;
     private final ProgramImageRepository programImageRepository;
-    private final EligibilityRepository eligibilityRepository;
+    private final ApplicationRepository applicationRepository;
     private final SupportGroupRepository supportGroupRepository;
     private final CarePersonRepository carePersonRepository;
     private final VenueService venueService;
@@ -81,8 +81,8 @@ public class EligibilityService {
                 .sorted(LIST_ORDER)
                 .toList();
 
-        int from = Math.min(page * size, judged.size());
-        List<Judged> pageItems = judged.subList(from, Math.min(from + size, judged.size()));
+        int from = (int) Math.min((long) page * size, judged.size());
+        List<Judged> pageItems = judged.subList(from, (int) Math.min((long) from + size, judged.size()));
         Map<Long, String> thumbnails = thumbnails(pageItems.stream().map(item -> item.program().getId()).toList());
 
         List<EligibleProgramResponseDto> content = pageItems.stream()
@@ -169,36 +169,13 @@ public class EligibilityService {
         return new JudgementImpactResponseDto(true, affected.size(), affected.stream().limit(IMPACT_LIMIT).toList());
     }
 
-    @Transactional
-    public void recompute(SupportGroup group) {
-        List<CarePerson> carePersons = defaultCarePersons(group,
-                carePersonRepository.findActiveWithItems(group.getOrganization().getId()));
-        Map<Long, Eligibility> existing = eligibilityRepository.findAllByGroupId(group.getId()).stream()
-                .collect(Collectors.toMap(eligibility -> eligibility.getProgram().getId(), Function.identity()));
-
-        for (ProgramFacts facts : loadFacts(openPrograms())) {
-            Judgement judgement = eligibilityJudge.judge(group, carePersons, facts);
-            Eligibility eligibility = existing.get(facts.program().getId());
-            if (eligibility == null) {
-                eligibilityRepository.save(Eligibility.builder()
-                        .group(group)
-                        .program(facts.program())
-                        .result(judgement.result())
-                        .reasons(judgement.reasons())
-                        .build());
-            } else {
-                eligibility.update(judgement.result(), judgement.reasons());
-            }
-        }
-    }
-
     private EligibilityResponseDto judgeOne(Program program, SupportGroup group, List<CarePerson> carePersons) {
         Judgement judgement = eligibilityJudge.judge(group, carePersons, loadFacts(List.of(program)).getFirst());
         return new EligibilityResponseDto(program.getId(), group.getId(), judgement.result(), judgement.reasons());
     }
 
     private List<Program> openPrograms() {
-        return programRepository.findAllByStatusAndDeletedAtIsNull(ProgramStatus.OPEN);
+        return programRepository.findJudgeable(LocalDateTime.now());
     }
 
     private List<ProgramFacts> loadFacts(List<Program> programs) {
@@ -208,6 +185,9 @@ public class EligibilityService {
         Map<Long, List<ProgramCondition>> conditions = programConditionRepository
                 .findAllByProgramIdIn(programs.stream().map(Program::getId).toList()).stream()
                 .collect(Collectors.groupingBy(condition -> condition.getProgram().getId()));
+        Map<Long, Long> takenSeats = applicationRepository.sumParticipantsByProgramIds(
+                        programs.stream().map(Program::getId).toList(), ApplicationStatus.NOT_HOLDING_SEAT).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> ((Number) row[1]).longValue()));
         Map<Long, Map<FacilityType, FacilityStatus>> facilities = venueService.mergeStatusesByVenue(programs.stream()
                 .filter(program -> program.getVenue() != null)
                 .map(program -> program.getVenue().getId())
@@ -217,7 +197,8 @@ public class EligibilityService {
                 .map(program -> new ProgramFacts(program,
                         conditions.getOrDefault(program.getId(), List.of()),
                         program.getVenue() == null ? Map.of()
-                                : facilities.getOrDefault(program.getVenue().getId(), Map.of())))
+                                : facilities.getOrDefault(program.getVenue().getId(), Map.of()),
+                        takenSeats.getOrDefault(program.getId(), 0L)))
                 .toList();
     }
 

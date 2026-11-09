@@ -19,6 +19,9 @@ import dev.hidly.nubi.application.data.exception.ApplicationNotAllowedException;
 import dev.hidly.nubi.application.data.exception.CapacityExceededException;
 import dev.hidly.nubi.application.data.repository.ApplicationRepository;
 import dev.hidly.nubi.common.response.GlobalResponse;
+import dev.hidly.nubi.notification.data.enums.NotificationTargetType;
+import dev.hidly.nubi.notification.data.enums.NotificationType;
+import dev.hidly.nubi.notification.service.NotificationService;
 import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.organization.data.entity.Organization;
 import dev.hidly.nubi.organization.data.repository.OrganizationRepository;
@@ -57,12 +60,12 @@ public class ApplicationService {
     private final OrganizationRepository organizationRepository;
     private final SupportGroupRepository supportGroupRepository;
     private final CarePersonRepository carePersonRepository;
+    private final NotificationService notificationService;
 
-    // ponytail: 주최 기관 알림(NEW_APPLICATION)은 C 파트 알림 서비스가 생기면 여기서 보낸다.
     @Transactional
     public GlobalResponse<ApplicationResponseDto> applyDirect(Long programId, DirectApplicationRequestDto request) {
         Long organizationId = SecurityUtil.getOrganizationId();
-        Program program = programRepository.findById(programId)
+        Program program = programRepository.findLockedById(programId)
                 .filter(p -> !p.isDeleted())
                 .orElseThrow(ProgramNotFoundException::new);
         validateDirectApplicable(program, organizationId);
@@ -76,7 +79,7 @@ public class ApplicationService {
             throw new ApplicationDuplicatedException();
         }
         if (program.getCapacity() != null) {
-            long taken = applicationRepository.sumParticipantsExcept(programId, ApplicationStatus.RELEASED);
+            long taken = applicationRepository.sumParticipantsExcept(programId, ApplicationStatus.NOT_HOLDING_SEAT);
             if (taken + participantCount > program.getCapacity()) {
                 throw new CapacityExceededException();
             }
@@ -92,6 +95,12 @@ public class ApplicationService {
         }
 
         applicationRepository.save(application);
+        if (program.getHostOrganization() != null) {
+            notificationService.notify(program.getHostOrganization().getId(), NotificationType.NEW_APPLICATION,
+                    "새 신청이 들어왔어요",
+                    NotificationText.body("%s에 %s %d명이 신청했어요.".formatted(program.getTitle(), applicant.getName(), participantCount)),
+                    NotificationTargetType.APPLICATION, application.getId());
+        }
         log.info("[applyDirect] 바로 신청: organizationId={}, programId={}, applicationId={}, 인원 {}명, 개별 케어 {}명",
                 organizationId, programId, application.getId(), participantCount, carePersons.size());
 

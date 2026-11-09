@@ -9,6 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.locationtech.jts.geom.Point;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Entity
 @Table(name = "venue")
@@ -34,6 +36,8 @@ public class Venue extends BaseTimeEntity {
     @Column(columnDefinition = "geography(Point, 4326)")
     private Point location;
 
+    private LocalDateTime locationCheckedAt;
+
     @Builder
     private Venue(String name, String address, District district, String emdCode, Point location) {
         this.name = name;
@@ -41,6 +45,10 @@ public class Venue extends BaseTimeEntity {
         this.district = district;
         this.emdCode = emdCode;
         this.location = location;
+    }
+
+    public void markLocationChecked() {
+        this.locationCheckedAt = LocalDateTime.now();
     }
 
     public void fillEmdCode(String emdCode) {

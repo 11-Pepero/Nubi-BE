@@ -113,10 +113,6 @@ public class Program extends BaseTimeEntity {
                 .build();
     }
 
-    public void end() {
-        this.status = ProgramStatus.ENDED;
-    }
-
     public boolean isDeleted() {
         return deletedAt != null;
     }

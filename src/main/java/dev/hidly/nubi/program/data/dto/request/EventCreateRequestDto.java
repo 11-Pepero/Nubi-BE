@@ -51,7 +51,7 @@ public class EventCreateRequestDto {
     private ProgramStatus status;
 
     @Valid
-    private List<EventConditionRequestDto> conditions;
+    private List<@NotNull @Valid EventConditionRequestDto> conditions;
 
     public List<EventConditionRequestDto> conditionsOrEmpty() {
         return conditions == null ? List.of() : conditions;

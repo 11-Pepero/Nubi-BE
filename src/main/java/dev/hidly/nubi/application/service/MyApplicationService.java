@@ -59,13 +59,15 @@ public class MyApplicationService {
         long preparing = counts.get(ApplicationStatus.PREPARING);
         long waiting = counts.get(ApplicationStatus.SUBMITTED) + counts.get(ApplicationStatus.INQUIRY)
                 + counts.get(ApplicationStatus.WAITING);
-        long upcoming = counts.get(ApplicationStatus.CONFIRMED);
+        LocalDateTime now = LocalDateTime.now();
+        long upcoming = applicationRepository.countByApplicantAndStatusStartingAfter(organizationId,
+                ApplicationStatus.CONFIRMED, now);
         long attended = counts.get(ApplicationStatus.ATTENDED);
 
         LocalDate monday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDateTime weekStart = monday.atStartOfDay();
         long upcomingThisWeek = applicationRepository.countByApplicantAndStatusStartingBetween(organizationId,
-                ApplicationStatus.CONFIRMED, weekStart, weekStart.plusWeeks(1));
+                ApplicationStatus.CONFIRMED, now.isAfter(weekStart) ? now : weekStart, weekStart.plusWeeks(1));
 
         return GlobalResponse.ok(new MyApplicationCountResponseDto(preparing + waiting + upcoming + attended,
                 preparing, waiting, upcoming, upcomingThisWeek, attended, counts));
