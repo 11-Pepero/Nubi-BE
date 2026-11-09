@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.YearMonth;
 
-@Tag(name = "지도", description = "참여 사각지대 지도")
+@Tag(name = "지도와 통계", description = "사각지대, 지도 표시점")
 @RestController
 @RequestMapping("/api/v1/regions")
 @RequiredArgsConstructor
