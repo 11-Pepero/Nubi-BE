@@ -13,4 +13,6 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
 
     @Query("select v from Venue v where v.location is null order by v.locationCheckedAt asc nulls first, v.id asc")
     List<Venue> findWithoutLocation(Pageable pageable);
+
+    List<Venue> findTop100ByLocationIsNotNullAndEmdCodeIsNullOrderByIdAsc();
 }

@@ -51,6 +51,10 @@ public class Venue extends BaseTimeEntity {
         this.locationCheckedAt = LocalDateTime.now();
     }
 
+    public void fillEmdCode(String emdCode) {
+        this.emdCode = emdCode;
+    }
+
     public void fillLocation(String address, District district, Point location) {
         if (this.address == null) {
             this.address = address;
