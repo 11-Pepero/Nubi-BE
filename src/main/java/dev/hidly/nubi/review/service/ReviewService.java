@@ -14,7 +14,9 @@ import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.entity.ProgramCondition;
 import dev.hidly.nubi.program.data.enums.ConditionSource;
 import dev.hidly.nubi.program.data.enums.ConditionStatus;
+import dev.hidly.nubi.program.data.exception.ProgramNotFoundException;
 import dev.hidly.nubi.program.data.repository.ProgramConditionRepository;
+import dev.hidly.nubi.program.data.repository.ProgramRepository;
 import dev.hidly.nubi.review.data.dto.request.ReviewRequestDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
 import dev.hidly.nubi.review.data.entity.Review;
@@ -54,6 +56,7 @@ public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final SupportTagRepository supportTagRepository;
     private final ProgramConditionRepository programConditionRepository;
+    private final ProgramRepository programRepository;
     private final NotificationService notificationService;
 
     @Transactional
@@ -63,8 +66,8 @@ public class ReviewService {
         if (!application.getApplicantOrganization().getId().equals(SecurityUtil.getOrganizationId())) {
             throw new ApplicationAccessDeniedException();
         }
-        Program program = application.getProgram();
-        if (!REVIEWABLE.contains(application.getStatus())
+        Program program = lockProgram(application.getProgram().getId());
+        if (program.isDeleted() || !REVIEWABLE.contains(application.getStatus())
                 || (program.getStartAt() != null && program.getStartAt().isAfter(LocalDateTime.now()))) {
             throw new ReviewNotAllowedException();
         }
@@ -109,6 +112,10 @@ public class ReviewService {
         if (!review.getAuthorOrganization().getId().equals(SecurityUtil.getOrganizationId())) {
             throw new ReviewAccessDeniedException();
         }
+        Program program = lockProgram(review.getProgram().getId());
+        if (program.isDeleted()) {
+            throw new ReviewNotAllowedException();
+        }
         Map<Long, SupportTag> tags = findSupportTags(request.checksOrEmpty());
 
         review.update(request.getRating(), trimToNull(request.getContent()), trimToNull(request.getMismatchNote()),
@@ -116,11 +123,17 @@ public class ReviewService {
         Map<SupportTag, CheckAnswer> answers = new LinkedHashMap<>();
         request.checksOrEmpty().forEach(check -> answers.put(tags.get(check.getSupportTagId()), check.getAnswer()));
         review.replaceChecks(answers);
-        reflectToConditions(review.getProgram(), request.checksOrEmpty(), tags);
+        reflectToConditions(program, request.checksOrEmpty(), tags);
         log.info("[updateReview] 후기 수정: reviewId={}, 별점 {}, 확인 항목 {}개",
                 reviewId, review.getRating(), review.getChecks().size());
 
         return GlobalResponse.ok(ReviewResponseDto.from(review));
+    }
+
+    // 같은 프로그램의 후기 쓰기·수정을 한 줄로 세운다. 같은 신청에 후기가 두 번 들어가거나,
+    // 같은 지원 항목의 REVIEW 조건이 두 줄 생기거나, 같은 후기의 확인 항목이 겹쳐 들어가는 것을 막는다.
+    private Program lockProgram(Long programId) {
+        return programRepository.findLockedById(programId).orElseThrow(ProgramNotFoundException::new);
     }
 
     // 그랬어요·아니었어요는 프로그램 조건(source REVIEW)에 남겨 다음 기관의 참여 판정에 쓴다. 몰라요는 건드리지 않는다.

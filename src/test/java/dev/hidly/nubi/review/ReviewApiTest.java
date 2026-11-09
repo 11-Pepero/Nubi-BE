@@ -19,14 +19,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,6 +59,8 @@ class ReviewApiTest {
     private ProgramConditionRepository programConditionRepository;
     @Autowired
     private SupportTagRepository supportTagRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private record Login(String accessToken, Long organizationId) {
     }
@@ -227,6 +237,61 @@ class ReviewApiTest {
                         .header("Authorization", "Bearer " + applicant.accessToken())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void 같은_신청에_동시에_후기를_보내도_하나만_저장되고_나머지는_409() throws Exception {
+        Login host = signUp();
+        Login applicant = signUp();
+        Application application = application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+        long wheelchair = tagIds().get("WHEELCHAIR");
+        String body = """
+                {"rating":5,"checks":[{"supportTagId":%d,"answer":"YES"}]}
+                """.formatted(wheelchair);
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<Integer>> results = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            results.add(pool.submit(() -> {
+                start.await();
+                return write(applicant, application.getId(), body).andReturn().getResponse().getStatus();
+            }));
+        }
+        start.countDown();
+        List<Integer> statuses = new ArrayList<>();
+        for (Future<Integer> result : results) {
+            statuses.add(result.get(30, TimeUnit.SECONDS));
+        }
+        pool.shutdown();
+
+        assertThat(statuses).containsExactlyInAnyOrder(200, 409);
+        assertThat(programConditionRepository
+                .findAllByProgramIdAndSource(application.getProgram().getId(), ConditionSource.REVIEW)).hasSize(1);
+    }
+
+    @Test
+    void 삭제된_행사에는_후기를_쓰거나_고칠_수_없다() throws Exception {
+        Login host = signUp();
+        Login applicant = signUp();
+        Application written = application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+        long reviewId = review(applicant, written);
+        Application notWritten = application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+        jdbcTemplate.update("update program set deleted_at = now() where id in (?, ?)",
+                written.getProgram().getId(), notWritten.getProgram().getId());
+
+        write(applicant, notWritten.getId(), """
+                {"rating":3}
+                """)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("REVIEW_NOT_ALLOWED"));
+        mockMvc.perform(put("/api/v1/reviews/{reviewId}", reviewId)
+                        .header("Authorization", "Bearer " + applicant.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"rating":3}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("REVIEW_NOT_ALLOWED"));
     }
 
     @Test

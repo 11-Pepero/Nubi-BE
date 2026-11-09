@@ -12,7 +12,7 @@ public enum ErrorCode {
     IMAGE_ORDER_INVALID("행사의 모든 사진 ID를 한 번씩 보내야 합니다.", 400),
     APPLICATION_NOT_ALLOWED("지금은 이 행사에 바로 신청할 수 없습니다.", 400),
     INVALID_STATUS("지금 신청 상태에서는 바꿀 수 없는 상태입니다.", 400),
-    REVIEW_NOT_ALLOWED("참여가 확정되고 행사가 시작된 신청에만 후기를 쓸 수 있습니다.", 400),
+    REVIEW_NOT_ALLOWED("참여가 확정되고 행사가 시작된 신청에만 후기를 쓸 수 있습니다. 삭제된 행사의 후기는 쓰거나 고칠 수 없습니다.", 400),
     UNAUTHORIZED("인증에 실패했거나 토큰이 만료되었습니다.", 401),
     INVALID_CREDENTIALS("이메일 또는 비밀번호가 올바르지 않습니다.", 401),
     TOKEN_INVALID("유효하지 않은 토큰입니다.", 401),
