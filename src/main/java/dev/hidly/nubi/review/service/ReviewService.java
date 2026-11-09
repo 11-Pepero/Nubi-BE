@@ -16,15 +16,19 @@ import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.entity.ProgramCondition;
 import dev.hidly.nubi.program.data.enums.ConditionSource;
 import dev.hidly.nubi.program.data.enums.ConditionStatus;
+import dev.hidly.nubi.program.data.exception.ProgramAccessDeniedException;
 import dev.hidly.nubi.program.data.exception.ProgramNotFoundException;
 import dev.hidly.nubi.program.data.repository.ProgramConditionRepository;
 import dev.hidly.nubi.program.data.repository.ProgramRepository;
 import dev.hidly.nubi.review.data.dto.request.ReviewRequestDto;
 import dev.hidly.nubi.review.data.dto.response.ProgramReviewResponseDto;
+import dev.hidly.nubi.review.data.dto.response.ReceivedReviewsResponseDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
 import dev.hidly.nubi.review.data.entity.Review;
 import dev.hidly.nubi.review.data.entity.ReviewImage;
 import dev.hidly.nubi.review.data.enums.CheckAnswer;
+import dev.hidly.nubi.review.data.enums.ReviewReaction;
+import dev.hidly.nubi.review.data.enums.ReviewSort;
 import dev.hidly.nubi.review.data.exception.InvalidReviewRequestException;
 import dev.hidly.nubi.review.data.exception.ReviewAccessDeniedException;
 import dev.hidly.nubi.review.data.exception.ReviewDuplicatedException;
@@ -42,9 +46,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +62,6 @@ import java.util.stream.Collectors;
 public class ReviewService {
     private static final Set<ApplicationStatus> REVIEWABLE = Set.of(ApplicationStatus.CONFIRMED, ApplicationStatus.ATTENDED);
     private static final String REVIEW_EVIDENCE = "참여 기관 후기로 확인";
-    private static final Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final ApplicationRepository applicationRepository;
     private final ReviewRepository reviewRepository;
@@ -141,16 +144,58 @@ public class ReviewService {
                 .filter(program -> !program.isDeleted())
                 .orElseThrow(ProgramNotFoundException::new);
         Page<Review> reviews = reviewRepository.findAllByProgramIdAndIsPublicTrue(programId,
-                PageRequest.of(page, size, NEWEST_FIRST));
+                PageRequest.of(page, size, ReviewSort.LATEST.toSort()));
+        return GlobalResponse.ok(withImages(reviews));
+    }
 
+    // 주최 기관이 받은 후기(화면 16): 공개·비공개 모두와 위쪽 숫자, 지원 항목별·반응별 집계
+    @Transactional(readOnly = true)
+    public GlobalResponse<ReceivedReviewsResponseDto> getReceivedReviews(Long eventId, ReviewSort sort, boolean photoOnly,
+                                                                         int page, int size) {
+        Program program = programRepository.findById(eventId)
+                .filter(p -> !p.isDeleted())
+                .orElseThrow(ProgramNotFoundException::new);
+        if (!program.isHostedBy(SecurityUtil.getOrganizationId())) {
+            throw new ProgramAccessDeniedException();
+        }
+
+        Object[] people = reviewRepository.sumParticipants(eventId, REVIEWABLE).getFirst();
+        Object[] ratings = reviewRepository.countAndAverageRating(eventId).getFirst();
+        ReceivedReviewsResponseDto.Stats stats = new ReceivedReviewsResponseDto.Stats(
+                ((Number) people[0]).longValue(), ((Number) people[1]).longValue(), ((Number) people[2]).longValue(),
+                ((Number) ratings[0]).longValue(),
+                ratings[1] == null ? null : Math.round(((Number) ratings[1]).doubleValue() * 10) / 10.0);
+
+        Map<Long, ReceivedReviewsResponseDto.CheckStat> checks = new LinkedHashMap<>();
+        for (Object[] row : reviewRepository.countChecks(eventId)) {
+            Long tagId = (Long) row[0];
+            CheckAnswer answer = (CheckAnswer) row[3];
+            long count = ((Number) row[4]).longValue();
+            ReceivedReviewsResponseDto.CheckStat before = checks.getOrDefault(tagId,
+                    new ReceivedReviewsResponseDto.CheckStat(tagId, (String) row[1], (String) row[2], 0, 0, 0));
+            checks.put(tagId, new ReceivedReviewsResponseDto.CheckStat(tagId, before.code(), before.label(),
+                    before.yesCount() + (answer == CheckAnswer.YES ? count : 0),
+                    before.noCount() + (answer == CheckAnswer.NO ? count : 0),
+                    before.unknownCount() + (answer == CheckAnswer.UNKNOWN ? count : 0)));
+        }
+        List<ReceivedReviewsResponseDto.ReactionStat> reactions = reviewRepository.countReactions(eventId).stream()
+                .map(row -> new ReceivedReviewsResponseDto.ReactionStat((ReviewReaction) row[0], ((Number) row[1]).longValue()))
+                .sorted(Comparator.comparing(ReceivedReviewsResponseDto.ReactionStat::reaction))
+                .toList();
+
+        Page<Review> reviews = reviewRepository.findReceived(eventId, photoOnly, PageRequest.of(page, size, sort.toSort()));
+        return GlobalResponse.ok(new ReceivedReviewsResponseDto(stats, List.copyOf(checks.values()), reactions,
+                withImages(reviews)));
+    }
+
+    private PageResponse<ProgramReviewResponseDto> withImages(Page<Review> reviews) {
         List<Long> reviewIds = reviews.map(Review::getId).getContent();
         Map<Long, List<String>> imageUrls = reviewIds.isEmpty() ? Map.of()
                 : reviewImageRepository.findAllByReviewIdInOrderBySortOrderAsc(reviewIds).stream()
                 .collect(Collectors.groupingBy(image -> image.getReview().getId(),
                         Collectors.mapping(ReviewImage::getUrl, Collectors.toList())));
-
-        return GlobalResponse.ok(PageResponse.from(reviews.map(review ->
-                ProgramReviewResponseDto.of(review, imageUrls.getOrDefault(review.getId(), List.of())))));
+        return PageResponse.from(reviews.map(review ->
+                ProgramReviewResponseDto.of(review, imageUrls.getOrDefault(review.getId(), List.of()))));
     }
 
     // 같은 프로그램의 후기 쓰기·수정을 한 줄로 세운다. 같은 신청에 후기가 두 번 들어가거나,

@@ -337,6 +337,71 @@ class ReviewApiTest {
     }
 
     @Test
+    void 받은_후기는_주최_기관만_비공개까지_집계와_함께_본다() throws Exception {
+        Login host = signUp();
+        Login first = signUp();
+        Login second = signUp();
+        Application firstApplication = application(host, first, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+        long eventId = firstApplication.getProgram().getId();
+        Application secondApplication = applicationRepository.save(Application.builder()
+                .program(firstApplication.getProgram())
+                .applicantOrganization(organizationRepository.getReferenceById(second.organizationId()))
+                .participantCount(3).companionCount(1).status(ApplicationStatus.CONFIRMED).build());
+        Map<String, Long> tags = tagIds();
+
+        long firstReview = ((Number) JsonPath.read(write(first, firstApplication.getId(), """
+                {"rating":5,"checks":[{"supportTagId":%d,"answer":"YES"},{"supportTagId":%d,"answer":"NO"}],
+                 "reactions":["ENJOYED","WANT_AGAIN"]}
+                """.formatted(tags.get("WHEELCHAIR"), tags.get("EASY_WORDS")))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.data.reviewId")).longValue();
+        upload(first, firstReview, png()).andExpect(status().isOk());
+        write(second, secondApplication.getId(), """
+                {"rating":2,"isPublic":false,"checks":[{"supportTagId":%d,"answer":"YES"}],"reactions":["ENJOYED"]}
+                """.formatted(tags.get("WHEELCHAIR"))).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/events/{eventId}/reviews", eventId).header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stats.organizationCount").value(2))
+                .andExpect(jsonPath("$.data.stats.participantCount").value(9))
+                .andExpect(jsonPath("$.data.stats.companionCount").value(3))
+                .andExpect(jsonPath("$.data.stats.reviewCount").value(2))
+                .andExpect(jsonPath("$.data.stats.averageRating").value(3.5))
+                .andExpect(jsonPath("$.data.checks[?(@.code=='WHEELCHAIR')].yesCount").value(2))
+                .andExpect(jsonPath("$.data.checks[?(@.code=='EASY_WORDS')].noCount").value(1))
+                .andExpect(jsonPath("$.data.reactions[?(@.reaction=='ENJOYED')].count").value(2))
+                .andExpect(jsonPath("$.data.reactions[?(@.reaction=='WANT_AGAIN')].count").value(1))
+                .andExpect(jsonPath("$.data.reviews.totalElements").value(2));
+
+        mockMvc.perform(get("/api/v1/events/{eventId}/reviews", eventId).param("sort", "RATING_ASC")
+                        .header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(jsonPath("$.data.reviews.content[0].rating").value(2))
+                .andExpect(jsonPath("$.data.reviews.content[0].isPublic").value(false));
+        mockMvc.perform(get("/api/v1/events/{eventId}/reviews", eventId).param("photoOnly", "true")
+                        .header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(jsonPath("$.data.reviews.totalElements").value(1))
+                .andExpect(jsonPath("$.data.reviews.content[0].reviewId").value(firstReview));
+
+        mockMvc.perform(get("/api/v1/events/{eventId}/reviews", eventId).header("Authorization", "Bearer " + first.accessToken()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("PROGRAM_ACCESS_DENIED"));
+    }
+
+    @Test
+    void 받은_후기가_없으면_평균_별점은_null() throws Exception {
+        Login host = signUp();
+        Login applicant = signUp();
+        Application application = application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+
+        mockMvc.perform(get("/api/v1/events/{eventId}/reviews", application.getProgram().getId())
+                        .header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stats.reviewCount").value(0))
+                .andExpect(jsonPath("$.data.stats.averageRating").doesNotExist())
+                .andExpect(jsonPath("$.data.checks.length()").value(0))
+                .andExpect(jsonPath("$.data.reviews.totalElements").value(0));
+    }
+
+    @Test
     void 시작_전_행사나_확정_전_신청은_400_다른_기관은_403() throws Exception {
         Login host = signUp();
         Login applicant = signUp();

@@ -4,6 +4,8 @@ import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.review.data.dto.request.ReviewRequestDto;
 import dev.hidly.nubi.review.data.dto.response.ProgramReviewResponseDto;
+import dev.hidly.nubi.review.data.dto.response.ReceivedReviewsResponseDto;
+import dev.hidly.nubi.review.data.enums.ReviewSort;
 import dev.hidly.nubi.review.data.dto.response.ReviewImageResponseDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
 import dev.hidly.nubi.review.service.ReviewImageService;
@@ -66,6 +68,20 @@ public class ReviewController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return reviewService.getProgramReviews(programId, page, size);
+    }
+
+    @GetMapping("/events/{eventId}/reviews")
+    @Operation(summary = "받은 후기 목록", description = "주최 기관만 볼 수 있고, 비공개 후기도 함께 보여 줍니다. "
+            + "stats는 참여 기관 수·이용자 수·동반인 수(확정 또는 다녀온 신청 기준), 받은 후기 수, 평균 별점(소수 첫째 자리, 후기가 없으면 null)입니다. "
+            + "checks는 지원 항목별 그랬어요·아니었어요·몰라요 수, reactions는 반응별 수입니다. "
+            + "sort는 LATEST(최신순, 기본) 또는 RATING_ASC(별점 낮은 순), photoOnly=true면 사진 있는 후기만 목록에 담습니다.")
+    public GlobalResponse<ReceivedReviewsResponseDto> getReceivedReviews(
+            @PathVariable Long eventId,
+            @RequestParam(defaultValue = "LATEST") ReviewSort sort,
+            @RequestParam(defaultValue = "false") boolean photoOnly,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return reviewService.getReceivedReviews(eventId, sort, photoOnly, page, size);
     }
 
     @PostMapping(value = "/reviews/{reviewId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
