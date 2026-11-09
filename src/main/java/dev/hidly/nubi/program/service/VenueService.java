@@ -45,7 +45,7 @@ public class VenueService {
         return GlobalResponse.ok(PageResponse.from(venues.map(VenueResponseDto::from)));
     }
 
-    // ponytail: like의 %, _ 를 글자로 찾도록 지운다. 이스케이프 문자 지정까지는 필요 없다.
+    // like의 %, _ 를 글자로 찾도록 지운다. 이스케이프 문자 지정까지는 필요 없다.
     private static String escapeLike(String keyword) {
         return keyword.replace("%", "").replace("_", "");
     }

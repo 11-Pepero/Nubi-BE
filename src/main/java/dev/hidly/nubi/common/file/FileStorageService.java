@@ -19,7 +19,7 @@ import java.util.UUID;
 public class FileStorageService {
     public static final String URL_PREFIX = "/uploads/";
     private static final long MAX_SIZE = 5 * 1024 * 1024;
-    // ponytail: Content-Type 헤더만 확인, 위조된 파일까지 막으려면 매직 바이트 검사 추가
+    // Content-Type 헤더만 확인, 위조된 파일까지 막으려면 매직 바이트 검사 추가
     private static final Map<String, String> EXTENSIONS = Map.of(
             "image/jpeg", ".jpg",
             "image/png", ".png",
