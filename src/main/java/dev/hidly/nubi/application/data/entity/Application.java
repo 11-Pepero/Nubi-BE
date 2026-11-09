@@ -138,6 +138,13 @@ public class Application extends BaseTimeEntity {
         this.decidedAt = next == ApplicationStatus.WAITING ? null : LocalDateTime.now();
     }
 
+    // 후기를 쓰면 다녀온 것으로 본다 (CONFIRMED → ATTENDED)
+    public void markAttended() {
+        if (status == ApplicationStatus.CONFIRMED) {
+            this.status = ApplicationStatus.ATTENDED;
+        }
+    }
+
     public boolean belongsTo(Long programId) {
         return program.getId().equals(programId);
     }
