@@ -1,6 +1,12 @@
 package dev.hidly.nubi.program.service;
 
 import dev.hidly.nubi.common.response.GlobalResponse;
+import dev.hidly.nubi.common.response.PageResponse;
+import dev.hidly.nubi.program.data.dto.response.VenueResponseDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import java.util.Locale;
 import dev.hidly.nubi.program.data.dto.response.FacilityResponseDto;
 import dev.hidly.nubi.program.data.dto.response.FacilitySourceResponseDto;
 import dev.hidly.nubi.program.data.dto.response.VenueFacilitiesResponseDto;
@@ -28,6 +34,21 @@ import java.util.stream.Collectors;
 public class VenueService {
     private final VenueRepository venueRepository;
     private final VenueFacilityRepository venueFacilityRepository;
+
+    // 행사 등록 화면에서 장소를 고를 때 쓴다. 키워드가 없으면 전체를 이름순으로 준다.
+    @Transactional(readOnly = true)
+    public GlobalResponse<PageResponse<VenueResponseDto>> search(String keyword, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("name", "id"));
+        Page<Venue> venues = keyword == null || keyword.isBlank()
+                ? venueRepository.findAll(pageable)
+                : venueRepository.search("%" + escapeLike(keyword.trim().toLowerCase(Locale.ROOT)) + "%", pageable);
+        return GlobalResponse.ok(PageResponse.from(venues.map(VenueResponseDto::from)));
+    }
+
+    // ponytail: like의 %, _ 를 글자로 찾도록 지운다. 이스케이프 문자 지정까지는 필요 없다.
+    private static String escapeLike(String keyword) {
+        return keyword.replace("%", "").replace("_", "");
+    }
 
     @Transactional(readOnly = true)
     public GlobalResponse<VenueFacilitiesResponseDto> getFacilities(Long venueId) {
