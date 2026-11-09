@@ -10,6 +10,7 @@ import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.notification.data.enums.NotificationTargetType;
 import dev.hidly.nubi.notification.data.enums.NotificationType;
 import dev.hidly.nubi.notification.service.NotificationService;
+import dev.hidly.nubi.notification.service.NotificationText;
 import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.entity.ProgramCondition;
 import dev.hidly.nubi.program.data.enums.ConditionSource;
@@ -20,7 +21,6 @@ import dev.hidly.nubi.program.data.repository.ProgramRepository;
 import dev.hidly.nubi.review.data.dto.request.ReviewRequestDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
 import dev.hidly.nubi.review.data.entity.Review;
-import dev.hidly.nubi.review.data.entity.ReviewCheck;
 import dev.hidly.nubi.review.data.enums.CheckAnswer;
 import dev.hidly.nubi.review.data.exception.InvalidReviewRequestException;
 import dev.hidly.nubi.review.data.exception.ReviewAccessDeniedException;
@@ -50,7 +50,6 @@ import java.util.stream.Collectors;
 public class ReviewService {
     private static final Set<ApplicationStatus> REVIEWABLE = Set.of(ApplicationStatus.CONFIRMED, ApplicationStatus.ATTENDED);
     private static final String REVIEW_EVIDENCE = "참여 기관 후기로 확인";
-    private static final int NOTIFICATION_BODY_LIMIT = 200;
 
     private final ApplicationRepository applicationRepository;
     private final ReviewRepository reviewRepository;
@@ -84,10 +83,7 @@ public class ReviewService {
                 .isPublic(request.isPublicOrDefault())
                 .reactions(request.reactionsOrEmpty())
                 .build();
-        request.checksOrEmpty().forEach(check -> review.addCheck(ReviewCheck.builder()
-                .supportTag(tags.get(check.getSupportTagId()))
-                .answer(check.getAnswer())
-                .build()));
+        review.replaceChecks(answers(request, tags));
         reviewRepository.save(review);
         application.markAttended();
         reflectToConditions(program, request.checksOrEmpty(), tags);
@@ -95,7 +91,7 @@ public class ReviewService {
         if (program.getHostOrganization() != null) {
             notificationService.notify(program.getHostOrganization().getId(), NotificationType.NEW_REVIEW,
                     "새 후기가 올라왔어요",
-                    body("%s에 %s이(가) 후기를 남겼어요.".formatted(program.getTitle(),
+                    NotificationText.body("%s에 %s이(가) 후기를 남겼어요.".formatted(program.getTitle(),
                             application.getApplicantOrganization().getName())),
                     NotificationTargetType.REVIEW, review.getId());
         }
@@ -120,9 +116,7 @@ public class ReviewService {
 
         review.update(request.getRating(), trimToNull(request.getContent()), trimToNull(request.getMismatchNote()),
                 request.isPublicOrDefault(), request.reactionsOrEmpty());
-        Map<SupportTag, CheckAnswer> answers = new LinkedHashMap<>();
-        request.checksOrEmpty().forEach(check -> answers.put(tags.get(check.getSupportTagId()), check.getAnswer()));
-        review.replaceChecks(answers);
+        review.replaceChecks(answers(request, tags));
         reflectToConditions(program, request.checksOrEmpty(), tags);
         log.info("[updateReview] 후기 수정: reviewId={}, 별점 {}, 확인 항목 {}개",
                 reviewId, review.getRating(), review.getChecks().size());
@@ -161,6 +155,12 @@ public class ReviewService {
         }
     }
 
+    private static Map<SupportTag, CheckAnswer> answers(ReviewRequestDto request, Map<Long, SupportTag> tags) {
+        Map<SupportTag, CheckAnswer> answers = new LinkedHashMap<>();
+        request.checksOrEmpty().forEach(check -> answers.put(tags.get(check.getSupportTagId()), check.getAnswer()));
+        return answers;
+    }
+
     private Map<Long, SupportTag> findSupportTags(List<ReviewRequestDto.Check> checks) {
         if (checks.isEmpty()) {
             return Map.of();
@@ -175,10 +175,6 @@ public class ReviewService {
             throw new SupportTagNotFoundException();
         }
         return tags;
-    }
-
-    private static String body(String text) {
-        return text.length() <= NOTIFICATION_BODY_LIMIT ? text : text.substring(0, NOTIFICATION_BODY_LIMIT - 1) + "…";
     }
 
     private static String trimToNull(String value) {

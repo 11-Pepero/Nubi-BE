@@ -22,6 +22,7 @@ import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.notification.data.enums.NotificationTargetType;
 import dev.hidly.nubi.notification.data.enums.NotificationType;
 import dev.hidly.nubi.notification.service.NotificationService;
+import dev.hidly.nubi.notification.service.NotificationText;
 import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.organization.data.entity.Organization;
 import dev.hidly.nubi.organization.data.repository.OrganizationRepository;
