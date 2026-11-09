@@ -1,6 +1,8 @@
 package dev.hidly.nubi.application.controller;
 
 import dev.hidly.nubi.application.data.dto.request.ApplicationDecisionRequestDto;
+import dev.hidly.nubi.application.data.dto.request.MessageRequestDto;
+import dev.hidly.nubi.application.data.dto.request.SupportPrepRequestDto;
 import dev.hidly.nubi.application.data.dto.response.EventApplicationDetailResponseDto;
 import dev.hidly.nubi.application.data.dto.response.EventApplicationListResponseDto;
 import dev.hidly.nubi.application.data.enums.ApplicationStatus;
@@ -38,6 +40,23 @@ public class EventApplicationController {
     public GlobalResponse<EventApplicationDetailResponseDto> getApplication(@PathVariable Long eventId,
                                                                             @PathVariable Long applicationId) {
         return eventApplicationService.getApplication(eventId, applicationId);
+    }
+
+    @PatchMapping("/{applicationId}/supports/{supportId}")
+    @Operation(summary = "지원 준비 체크", description = "신청한 필요 지원 하나의 준비 상태(PENDING 준비 전, READY 준비함, CHECK 확인 필요)와 주최 메모를 바꿉니다. supportId는 신청 상세의 supports[].applicationSupportId입니다.")
+    public GlobalResponse<EventApplicationDetailResponseDto> updateSupportPrep(@PathVariable Long eventId,
+                                                                              @PathVariable Long applicationId,
+                                                                              @PathVariable Long supportId,
+                                                                              @Valid @RequestBody SupportPrepRequestDto request) {
+        return eventApplicationService.updateSupportPrep(eventId, applicationId, supportId, request);
+    }
+
+    @PostMapping("/{applicationId}/messages")
+    @Operation(summary = "답장 보내기", description = "신청 기관의 문의에 주최 기관이 답장합니다. 취소된 신청에는 보낼 수 없습니다.")
+    public GlobalResponse<EventApplicationDetailResponseDto> reply(@PathVariable Long eventId,
+                                                                   @PathVariable Long applicationId,
+                                                                   @Valid @RequestBody MessageRequestDto request) {
+        return eventApplicationService.reply(eventId, applicationId, request);
     }
 
     @PatchMapping("/{applicationId}/status")
