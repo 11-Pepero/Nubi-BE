@@ -113,6 +113,27 @@ public class Program extends BaseTimeEntity {
                 .build();
     }
 
+    // 기관 행사 수정 (API-41). 주최·신청 방법(DIRECT)은 바꾸지 않는다.
+    public void updateEvent(Venue venue, String title, ProgramCategory category, String description,
+                            LocalDateTime startAt, LocalDateTime endAt, Integer capacity, String contactPhone,
+                            LocalDateTime deadlineAt, ProgramStatus status) {
+        this.venue = venue;
+        this.title = title;
+        this.category = category;
+        this.description = description;
+        this.startAt = startAt;
+        this.endAt = endAt;
+        this.capacity = capacity;
+        this.contactPhone = contactPhone;
+        this.deadlineAt = deadlineAt;
+        this.status = status;
+    }
+
+    // 신청 마감 (API-42): 공개 중(OPEN)에서 마감(CLOSED)으로
+    public void close() {
+        this.status = ProgramStatus.CLOSED;
+    }
+
     public boolean isDeleted() {
         return deletedAt != null;
     }

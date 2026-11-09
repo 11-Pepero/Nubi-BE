@@ -5,7 +5,11 @@ import dev.hidly.nubi.application.data.dto.response.EventApplicationDetailRespon
 import dev.hidly.nubi.application.data.dto.response.EventApplicationListResponseDto;
 import dev.hidly.nubi.application.data.dto.response.EventApplicationSummaryResponseDto;
 import dev.hidly.nubi.application.data.entity.Application;
+import dev.hidly.nubi.application.data.dto.request.MessageRequestDto;
+import dev.hidly.nubi.application.data.dto.request.SupportPrepRequestDto;
 import dev.hidly.nubi.application.data.dto.response.EventNeedsResponseDto;
+import dev.hidly.nubi.application.data.exception.ApplicationSupportNotFoundException;
+import dev.hidly.nubi.application.data.exception.InvalidApplicationStatusException;
 import dev.hidly.nubi.application.data.entity.ApplicationMessage;
 import dev.hidly.nubi.application.data.entity.ApplicationSupport;
 import dev.hidly.nubi.application.data.enums.PrepStatus;
@@ -189,6 +193,40 @@ public class EventApplicationService {
             return PrepStatus.READY;
         }
         return PrepStatus.PENDING;
+    }
+
+    // 지원 준비 체크 (API-46)
+    @Transactional
+    public GlobalResponse<EventApplicationDetailResponseDto> updateSupportPrep(Long eventId, Long applicationId,
+                                                                              Long supportId, SupportPrepRequestDto request) {
+        getHostedEvent(eventId);
+        Application application = getApplicationOf(eventId, applicationId);
+        ApplicationSupport support = application.getSupports().stream()
+                .filter(s -> s.getId().equals(supportId))
+                .findFirst()
+                .orElseThrow(ApplicationSupportNotFoundException::new);
+        support.updatePrep(request.getPrepStatus(), request.getHostNote());
+        applicationRepository.flush();
+        log.info("[updateSupportPrep] 지원 준비 체크: applicationId={}, supportId={}, {}",
+                applicationId, supportId, request.getPrepStatus());
+        return GlobalResponse.ok(toDetail(application));
+    }
+
+    // 답장 보내기 (API-47)
+    @Transactional
+    public GlobalResponse<EventApplicationDetailResponseDto> reply(Long eventId, Long applicationId, MessageRequestDto request) {
+        Program event = getHostedEvent(eventId);
+        Application application = getApplicationOf(eventId, applicationId);
+        if (!application.acceptsMessages()) {
+            throw new InvalidApplicationStatusException();
+        }
+        application.addMessage(ApplicationMessage.builder()
+                .senderOrganization(event.getHostOrganization())
+                .body(request.getBody().trim())
+                .build());
+        applicationRepository.flush();
+        log.info("[replyApplication] 답장: eventId={}, applicationId={}", eventId, applicationId);
+        return GlobalResponse.ok(toDetail(application));
     }
 
     // 내 행사 목록(API-39)에서 행사별 신청 숫자를 한 번에 가져올 때도 쓴다.

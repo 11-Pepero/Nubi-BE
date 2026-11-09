@@ -145,6 +145,33 @@ public class Application extends BaseTimeEntity {
         }
     }
 
+    // 신청 기관의 취소: 거절·취소·다녀옴이 아니면 참여 전까지 가능
+    public void cancelByApplicant(LocalDateTime now) {
+        boolean finished = status == ApplicationStatus.REJECTED || status == ApplicationStatus.CANCELLED
+                || status == ApplicationStatus.ATTENDED;
+        boolean started = program.getStartAt() != null && now.isAfter(program.getStartAt());
+        if (finished || started) {
+            throw new InvalidApplicationStatusException();
+        }
+        this.status = ApplicationStatus.CANCELLED;
+    }
+
+    // 신청 기관이 문의를 보내면 접수 기다림 신청은 "문의 있음"으로 표시한다. 다른 상태는 그대로 둔다.
+    public void markInquiry() {
+        if (status == ApplicationStatus.SUBMITTED) {
+            this.status = ApplicationStatus.INQUIRY;
+        }
+    }
+
+    // 취소된 신청에는 문의·답장을 더 남기지 않는다.
+    public boolean acceptsMessages() {
+        return status != ApplicationStatus.CANCELLED;
+    }
+
+    public boolean isAppliedBy(Long organizationId) {
+        return applicantOrganization.getId().equals(organizationId);
+    }
+
     public boolean belongsTo(Long programId) {
         return program.getId().equals(programId);
     }

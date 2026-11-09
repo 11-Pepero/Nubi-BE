@@ -60,6 +60,20 @@ public class Organization extends BaseTimeEntity {
         this.phone = phone;
     }
 
+    // 내 기관 수정 (API-5). 보낸 값만 바꾸고, 주소가 바뀌면 구도 다시 정한다. 좌표는 그대로 둔다.
+    public void update(String name, String address, String phone) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (address != null) {
+            this.address = address;
+            this.district = District.fromAddress(address).orElse(null);
+        }
+        if (phone != null) {
+            this.phone = phone;
+        }
+    }
+
     public boolean isDeleted() {
         return deletedAt != null;
     }

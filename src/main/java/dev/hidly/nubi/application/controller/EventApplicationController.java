@@ -1,10 +1,18 @@
 package dev.hidly.nubi.application.controller;
 
 import dev.hidly.nubi.application.data.dto.request.ApplicationDecisionRequestDto;
+import dev.hidly.nubi.application.data.dto.request.MessageRequestDto;
+import dev.hidly.nubi.application.data.dto.request.SupportPrepRequestDto;
 import dev.hidly.nubi.application.data.dto.response.EventApplicationDetailResponseDto;
 import dev.hidly.nubi.application.data.dto.response.EventApplicationListResponseDto;
 import dev.hidly.nubi.application.data.enums.ApplicationStatus;
+import dev.hidly.nubi.application.service.ApplicationExportService;
 import dev.hidly.nubi.application.service.EventApplicationService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import java.nio.charset.StandardCharsets;
 import dev.hidly.nubi.common.response.GlobalResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +30,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EventApplicationController {
     private final EventApplicationService eventApplicationService;
+    private final ApplicationExportService applicationExportService;
 
     @GetMapping
     @Operation(summary = "신청 기관 목록", description = "주최 기관만 볼 수 있습니다. status를 여러 번 보내면 함께 조회합니다(새 신청 = SUBMITTED, 문의 있음 = INQUIRY, 확정 = CONFIRMED). 위쪽 숫자(이용자, 동반 인력, 새 신청)는 거절·취소를 뺀 신청 기준이고, statusCounts는 탭별 건수입니다.")
@@ -33,11 +42,41 @@ public class EventApplicationController {
         return eventApplicationService.getApplications(eventId, status, page, size);
     }
 
+    @GetMapping("/export")
+    @Operation(summary = "신청 명단 내려받기", description = "주최 기관만 내려받을 수 있는 엑셀(xlsx) 파일입니다. '신청 기관' 시트(기관, 그룹, 담당자, 연락처, 인원, 오는 방법, 필요한 지원, 상태)와 '개별 케어' 시트(별칭, 케어 내용)가 있습니다. status를 비우면 거절·취소를 뺀 신청, 보내면 그 상태만 담습니다. format은 xlsx만 됩니다.")
+    public ResponseEntity<byte[]> export(@PathVariable Long eventId,
+                                         @RequestParam(defaultValue = ApplicationExportService.XLSX) String format,
+                                         @RequestParam(required = false) List<ApplicationStatus> status) {
+        ApplicationExportService.ExportFile file = applicationExportService.export(eventId, format, status);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(file.fileName(), StandardCharsets.UTF_8).build().toString())
+                .body(file.content());
+    }
+
     @GetMapping("/{applicationId}")
     @Operation(summary = "신청 내용 상세", description = "담당자, 함께 오는 사람, 신청할 때 복사해 둔 필요 지원과 개별 케어, 주고받은 문의를 보여 줍니다.")
     public GlobalResponse<EventApplicationDetailResponseDto> getApplication(@PathVariable Long eventId,
                                                                             @PathVariable Long applicationId) {
         return eventApplicationService.getApplication(eventId, applicationId);
+    }
+
+    @PatchMapping("/{applicationId}/supports/{supportId}")
+    @Operation(summary = "지원 준비 체크", description = "신청한 필요 지원 하나의 준비 상태(PENDING 준비 전, READY 준비함, CHECK 확인 필요)와 주최 메모를 바꿉니다. supportId는 신청 상세의 supports[].applicationSupportId입니다.")
+    public GlobalResponse<EventApplicationDetailResponseDto> updateSupportPrep(@PathVariable Long eventId,
+                                                                              @PathVariable Long applicationId,
+                                                                              @PathVariable Long supportId,
+                                                                              @Valid @RequestBody SupportPrepRequestDto request) {
+        return eventApplicationService.updateSupportPrep(eventId, applicationId, supportId, request);
+    }
+
+    @PostMapping("/{applicationId}/messages")
+    @Operation(summary = "답장 보내기", description = "신청 기관의 문의에 주최 기관이 답장합니다. 취소된 신청에는 보낼 수 없습니다.")
+    public GlobalResponse<EventApplicationDetailResponseDto> reply(@PathVariable Long eventId,
+                                                                   @PathVariable Long applicationId,
+                                                                   @Valid @RequestBody MessageRequestDto request) {
+        return eventApplicationService.reply(eventId, applicationId, request);
     }
 
     @PatchMapping("/{applicationId}/status")
