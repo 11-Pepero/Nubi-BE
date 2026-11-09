@@ -19,8 +19,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -28,11 +30,12 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "file.upload-dir=build/test-uploads")
 @AutoConfigureMockMvc
 class ReviewApiTest {
     @Autowired
@@ -122,6 +125,59 @@ class ReviewApiTest {
                 """)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("REVIEW_DUPLICATED"));
+    }
+
+    private long review(Login applicant, Application application) throws Exception {
+        String response = write(applicant, application.getId(), """
+                {"rating":5}
+                """).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(response, "$.data.reviewId")).longValue();
+    }
+
+    private ResultActions upload(Login login, long reviewId, MockMultipartFile... files) throws Exception {
+        MockMultipartHttpServletRequestBuilder request = multipart("/api/v1/reviews/{reviewId}/images", reviewId);
+        for (MockMultipartFile file : files) {
+            request.file(file);
+        }
+        return mockMvc.perform(request.header("Authorization", "Bearer " + login.accessToken()));
+    }
+
+    private static MockMultipartFile png() {
+        return new MockMultipartFile("images", "walk.png", "image/png", new byte[]{1, 2, 3});
+    }
+
+    @Test
+    void 후기_사진은_쓴_기관만_10장까지_올린다() throws Exception {
+        Login host = signUp();
+        Login applicant = signUp();
+        long reviewId = review(applicant, application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED));
+
+        upload(applicant, reviewId, png(), png())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[1].sortOrder").value(1));
+        upload(applicant, reviewId, png(), png(), png(), png(), png(), png(), png(), png())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(10));
+
+        upload(applicant, reviewId, png())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("REVIEW_IMAGE_COUNT_EXCEEDED"));
+        upload(host, reviewId, png()).andExpect(status().isForbidden());
+        upload(applicant, 999_999_999L, png())
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("REVIEW_NOT_FOUND"));
+    }
+
+    @Test
+    void 이미지가_아닌_파일은_400() throws Exception {
+        Login host = signUp();
+        Login applicant = signUp();
+        long reviewId = review(applicant, application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED));
+
+        upload(applicant, reviewId, new MockMultipartFile("images", "a.gif", "image/gif", new byte[]{1}))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("IMAGE_TYPE_NOT_ALLOWED"));
     }
 
     @Test

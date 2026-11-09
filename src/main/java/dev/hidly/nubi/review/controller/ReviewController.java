@@ -2,17 +2,24 @@ package dev.hidly.nubi.review.controller;
 
 import dev.hidly.nubi.common.response.GlobalResponse;
 import dev.hidly.nubi.review.data.dto.request.ReviewCreateRequestDto;
+import dev.hidly.nubi.review.data.dto.response.ReviewImageResponseDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
+import dev.hidly.nubi.review.service.ReviewImageService;
 import dev.hidly.nubi.review.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @Tag(name = "후기", description = "후기 쓰기, 목록, 답글")
 @RestController
@@ -20,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ReviewController {
     private final ReviewService reviewService;
+    private final ReviewImageService reviewImageService;
 
     @PostMapping("/applications/{applicationId}/review")
     @Operation(summary = "후기 쓰기", description = "우리 기관 신청에 후기를 남깁니다. 참여 확정(CONFIRMED) 또는 다녀왔어요(ATTENDED) 상태이고 "
@@ -31,5 +39,13 @@ public class ReviewController {
     public GlobalResponse<ReviewResponseDto> create(@PathVariable Long applicationId,
                                                     @Valid @RequestBody ReviewCreateRequestDto request) {
         return reviewService.create(applicationId, request);
+    }
+
+    @PostMapping(value = "/reviews/{reviewId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "후기 사진 올리기", description = "후기를 쓴 기관만 올릴 수 있고, 후기당 10장까지 저장합니다. "
+            + "JPG, PNG, WEBP만, 한 장에 5MB까지입니다. 응답은 그 후기의 사진 전체(올린 순서)입니다.")
+    public GlobalResponse<List<ReviewImageResponseDto>> uploadImages(@PathVariable Long reviewId,
+                                                                     @RequestPart("images") List<MultipartFile> images) {
+        return reviewImageService.upload(reviewId, images);
     }
 }
