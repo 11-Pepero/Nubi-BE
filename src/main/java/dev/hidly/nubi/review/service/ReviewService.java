@@ -6,6 +6,7 @@ import dev.hidly.nubi.application.data.exception.ApplicationAccessDeniedExceptio
 import dev.hidly.nubi.application.data.exception.ApplicationNotFoundException;
 import dev.hidly.nubi.application.data.repository.ApplicationRepository;
 import dev.hidly.nubi.common.response.GlobalResponse;
+import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.notification.data.enums.NotificationTargetType;
 import dev.hidly.nubi.notification.data.enums.NotificationType;
@@ -19,14 +20,17 @@ import dev.hidly.nubi.program.data.exception.ProgramNotFoundException;
 import dev.hidly.nubi.program.data.repository.ProgramConditionRepository;
 import dev.hidly.nubi.program.data.repository.ProgramRepository;
 import dev.hidly.nubi.review.data.dto.request.ReviewRequestDto;
+import dev.hidly.nubi.review.data.dto.response.ProgramReviewResponseDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
 import dev.hidly.nubi.review.data.entity.Review;
+import dev.hidly.nubi.review.data.entity.ReviewImage;
 import dev.hidly.nubi.review.data.enums.CheckAnswer;
 import dev.hidly.nubi.review.data.exception.InvalidReviewRequestException;
 import dev.hidly.nubi.review.data.exception.ReviewAccessDeniedException;
 import dev.hidly.nubi.review.data.exception.ReviewDuplicatedException;
 import dev.hidly.nubi.review.data.exception.ReviewNotAllowedException;
 import dev.hidly.nubi.review.data.exception.ReviewNotFoundException;
+import dev.hidly.nubi.review.data.repository.ReviewImageRepository;
 import dev.hidly.nubi.review.data.repository.ReviewRepository;
 import dev.hidly.nubi.support.data.entity.SupportTag;
 import dev.hidly.nubi.support.data.exception.SupportTagNotFoundException;
@@ -35,6 +39,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -50,6 +58,7 @@ import java.util.stream.Collectors;
 public class ReviewService {
     private static final Set<ApplicationStatus> REVIEWABLE = Set.of(ApplicationStatus.CONFIRMED, ApplicationStatus.ATTENDED);
     private static final String REVIEW_EVIDENCE = "참여 기관 후기로 확인";
+    private static final Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final ApplicationRepository applicationRepository;
     private final ReviewRepository reviewRepository;
@@ -57,6 +66,7 @@ public class ReviewService {
     private final ProgramConditionRepository programConditionRepository;
     private final ProgramRepository programRepository;
     private final NotificationService notificationService;
+    private final ReviewImageRepository reviewImageRepository;
 
     @Transactional
     public GlobalResponse<ReviewResponseDto> create(Long applicationId, ReviewRequestDto request) {
@@ -122,6 +132,25 @@ public class ReviewService {
                 reviewId, review.getRating(), review.getChecks().size());
 
         return GlobalResponse.ok(ReviewResponseDto.from(review));
+    }
+
+    // 다른 기관도 볼 수 있게 공개한 후기만 최근 순으로 보여 준다. 비공개 후기는 주최 기관의 받은 후기 목록에서만 보인다.
+    @Transactional(readOnly = true)
+    public GlobalResponse<PageResponse<ProgramReviewResponseDto>> getProgramReviews(Long programId, int page, int size) {
+        programRepository.findById(programId)
+                .filter(program -> !program.isDeleted())
+                .orElseThrow(ProgramNotFoundException::new);
+        Page<Review> reviews = reviewRepository.findAllByProgramIdAndIsPublicTrue(programId,
+                PageRequest.of(page, size, NEWEST_FIRST));
+
+        List<Long> reviewIds = reviews.map(Review::getId).getContent();
+        Map<Long, List<String>> imageUrls = reviewIds.isEmpty() ? Map.of()
+                : reviewImageRepository.findAllByReviewIdInOrderBySortOrderAsc(reviewIds).stream()
+                .collect(Collectors.groupingBy(image -> image.getReview().getId(),
+                        Collectors.mapping(ReviewImage::getUrl, Collectors.toList())));
+
+        return GlobalResponse.ok(PageResponse.from(reviews.map(review ->
+                ProgramReviewResponseDto.of(review, imageUrls.getOrDefault(review.getId(), List.of())))));
     }
 
     // 같은 프로그램의 후기 쓰기·수정을 한 줄로 세운다. 같은 신청에 후기가 두 번 들어가거나,

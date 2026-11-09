@@ -38,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -292,6 +293,47 @@ class ReviewApiTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("REVIEW_NOT_ALLOWED"));
+    }
+
+    @Test
+    void 프로그램_후기_목록은_공개_후기만_사진과_함께_최근_순으로_보여_준다() throws Exception {
+        Login host = signUp();
+        Login first = signUp();
+        Login second = signUp();
+        Application publicOne = application(host, first, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+        Application privateOne = applicationRepository.save(Application.builder()
+                .program(publicOne.getProgram())
+                .applicantOrganization(organizationRepository.getReferenceById(second.organizationId()))
+                .participantCount(3).companionCount(1).status(ApplicationStatus.CONFIRMED).build());
+        long wheelchair = tagIds().get("WHEELCHAIR");
+
+        long reviewId = ((Number) JsonPath.read(write(first, publicOne.getId(), """
+                {"rating":4,"checks":[{"supportTagId":%d,"answer":"YES"}],"reactions":["ENJOYED"],"content":"편했어요"}
+                """.formatted(wheelchair)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
+                "$.data.reviewId")).longValue();
+        upload(first, reviewId, png()).andExpect(status().isOk());
+        write(second, privateOne.getId(), """
+                {"rating":2,"isPublic":false}
+                """).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/programs/{programId}/reviews", publicOne.getProgram().getId())
+                        .header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].reviewId").value(reviewId))
+                .andExpect(jsonPath("$.data.content[0].organizationName").value("용인 주간활동센터"))
+                .andExpect(jsonPath("$.data.content[0].rating").value(4))
+                .andExpect(jsonPath("$.data.content[0].participantCount").value(6))
+                .andExpect(jsonPath("$.data.content[0].companionCount").value(2))
+                .andExpect(jsonPath("$.data.content[0].checks[0].code").value("WHEELCHAIR"))
+                .andExpect(jsonPath("$.data.content[0].checks[0].answer").value("YES"))
+                .andExpect(jsonPath("$.data.content[0].reactions[0]").value("ENJOYED"))
+                .andExpect(jsonPath("$.data.content[0].imageUrls.length()").value(1));
+
+        mockMvc.perform(get("/api/v1/programs/{programId}/reviews", 999_999_999L)
+                        .header("Authorization", "Bearer " + host.accessToken()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("PROGRAM_NOT_FOUND"));
     }
 
     @Test

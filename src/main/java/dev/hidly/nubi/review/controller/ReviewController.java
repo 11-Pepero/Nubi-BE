@@ -1,7 +1,9 @@
 package dev.hidly.nubi.review.controller;
 
 import dev.hidly.nubi.common.response.GlobalResponse;
+import dev.hidly.nubi.common.response.PageResponse;
 import dev.hidly.nubi.review.data.dto.request.ReviewRequestDto;
+import dev.hidly.nubi.review.data.dto.response.ProgramReviewResponseDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewImageResponseDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
 import dev.hidly.nubi.review.service.ReviewImageService;
@@ -9,13 +11,17 @@ import dev.hidly.nubi.review.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -49,6 +55,17 @@ public class ReviewController {
     public GlobalResponse<ReviewResponseDto> update(@PathVariable Long reviewId,
                                                     @Valid @RequestBody ReviewRequestDto request) {
         return reviewService.update(reviewId, request);
+    }
+
+    @GetMapping("/programs/{programId}/reviews")
+    @Operation(summary = "프로그램 후기 목록", description = "다른 기관에도 공개한 후기(isPublic = true)만 최근 순으로 보여 줍니다. "
+            + "작성 기관 이름, 별점, 다녀온 인원(이용자·동반), 지원 항목별 확인 결과, 반응, 내용, 사진을 줍니다. "
+            + "비공개 후기는 주최 기관의 받은 후기 목록에서만 보입니다.")
+    public GlobalResponse<PageResponse<ProgramReviewResponseDto>> getProgramReviews(
+            @PathVariable Long programId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return reviewService.getProgramReviews(programId, page, size);
     }
 
     @PostMapping(value = "/reviews/{reviewId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
