@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -94,6 +95,17 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
                                                   @Param("status") ApplicationStatus status,
                                                   @Param("from") LocalDateTime from,
                                                   @Param("to") LocalDateTime to);
+
+    // 행사가 끝나면(끝나는 시각, 없으면 시작 시각이 지나면) 확정 신청을 다녀왔어요로 바꾼다.
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Application a set a.status = dev.hidly.nubi.application.data.enums.ApplicationStatus.ATTENDED
+            where a.status = dev.hidly.nubi.application.data.enums.ApplicationStatus.CONFIRMED
+              and a.program.id in (
+                select p.id from Program p where coalesce(p.endAt, p.startAt) < :now
+              )
+            """)
+    int markAttendedFinished(@Param("now") LocalDateTime now);
 
     // 행사 관리 요약(API-40): 내가 주최한 행사들에 들어온 신청
     @Query("""

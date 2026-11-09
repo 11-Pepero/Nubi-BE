@@ -31,6 +31,19 @@ public class EventController {
         return eventService.create(request);
     }
 
+    @PutMapping("/{eventId}")
+    @Operation(summary = "행사 수정", description = "요청은 행사 등록과 같습니다. 주최 기관만 고칠 수 있고, 끝난 행사는 고칠 수 없습니다. 공개한 행사를 임시 저장으로 되돌릴 수 없고, 정원을 이미 신청한 인원보다 적게 줄이면 409입니다. 주최가 넣은 조건(HOST)은 요청 내용으로 바뀝니다.")
+    public GlobalResponse<ProgramDetailResponseDto> update(@PathVariable Long eventId,
+                                                           @Valid @RequestBody EventCreateRequestDto request) {
+        return eventService.update(eventId, request);
+    }
+
+    @PatchMapping("/{eventId}/close")
+    @Operation(summary = "신청 마감", description = "공개 중(OPEN)인 행사를 마감(CLOSED)합니다. 마감하면 더 이상 바로 신청을 받지 않습니다.")
+    public GlobalResponse<ProgramDetailResponseDto> close(@PathVariable Long eventId) {
+        return eventService.close(eventId);
+    }
+
     @GetMapping("/summary")
     @Operation(summary = "행사 관리 요약", description = "진행 중(공개 중+마감)·지난·임시 저장 행사 수, 아직 정하지 않은 새 신청 수, 이번 달에 시작하는 행사의 확정 인원(이용자, 동반 인력)입니다. 받은 후기 수는 후기 기능이 생기면 추가합니다.")
     public GlobalResponse<EventDashboardResponseDto> getDashboard() {
