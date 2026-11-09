@@ -37,6 +37,10 @@ public class ReviewCheck extends BaseTimeEntity {
         this.answer = answer;
     }
 
+    void changeAnswer(CheckAnswer answer) {
+        this.answer = answer;
+    }
+
     void assignReview(Review review) {
         this.review = review;
     }

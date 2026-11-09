@@ -19,7 +19,7 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ReviewCreateRequestDto {
+public class ReviewRequestDto {
     @NotNull
     @Min(1)
     @Max(5)

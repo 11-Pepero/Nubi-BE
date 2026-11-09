@@ -1,7 +1,7 @@
 package dev.hidly.nubi.review.controller;
 
 import dev.hidly.nubi.common.response.GlobalResponse;
-import dev.hidly.nubi.review.data.dto.request.ReviewCreateRequestDto;
+import dev.hidly.nubi.review.data.dto.request.ReviewRequestDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewImageResponseDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
 import dev.hidly.nubi.review.service.ReviewImageService;
@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -37,8 +38,17 @@ public class ReviewController {
             + "reactions는 ENJOYED, WANT_AGAIN, HAD_DIFFICULTY, SHORT_BREAKS, LONG_DISTANCE. isPublic을 비우면 공개입니다. "
             + "주최 기관에 새 후기 알림이 갑니다.")
     public GlobalResponse<ReviewResponseDto> create(@PathVariable Long applicationId,
-                                                    @Valid @RequestBody ReviewCreateRequestDto request) {
+                                                    @Valid @RequestBody ReviewRequestDto request) {
         return reviewService.create(applicationId, request);
+    }
+
+    @PutMapping("/reviews/{reviewId}")
+    @Operation(summary = "후기 수정", description = "후기를 쓴 기관만 고칠 수 있습니다. 후기 쓰기와 같은 내용을 통째로 다시 보냅니다"
+            + "(보내지 않은 확인 항목·반응은 지워지고, isPublic을 비우면 공개). "
+            + "바뀐 YES·NO는 프로그램 조건(source REVIEW)에 다시 반영됩니다. 사진은 그대로 둡니다.")
+    public GlobalResponse<ReviewResponseDto> update(@PathVariable Long reviewId,
+                                                    @Valid @RequestBody ReviewRequestDto request) {
+        return reviewService.update(reviewId, request);
     }
 
     @PostMapping(value = "/reviews/{reviewId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

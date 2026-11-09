@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -178,6 +179,54 @@ class ReviewApiTest {
         upload(applicant, reviewId, new MockMultipartFile("images", "a.gif", "image/gif", new byte[]{1}))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("IMAGE_TYPE_NOT_ALLOWED"));
+    }
+
+    @Test
+    void 후기를_고치면_통째로_바뀌고_바뀐_답이_프로그램_조건에_다시_반영된다() throws Exception {
+        Login host = signUp();
+        Login applicant = signUp();
+        Application application = application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+        Map<String, Long> tags = tagIds();
+        String written = write(applicant, application.getId(), """
+                {"rating":4,"checks":[{"supportTagId":%d,"answer":"YES"},{"supportTagId":%d,"answer":"NO"}],
+                 "reactions":["ENJOYED"],"content":"좋았어요"}
+                """.formatted(tags.get("WHEELCHAIR"), tags.get("EASY_WORDS")))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long reviewId = ((Number) JsonPath.read(written, "$.data.reviewId")).longValue();
+
+        String body = """
+                {"rating":2,"checks":[{"supportTagId":%d,"answer":"NO"},{"supportTagId":%d,"answer":"YES"}],
+                 "reactions":["HAD_DIFFICULTY"],"isPublic":false}
+                """.formatted(tags.get("WHEELCHAIR"), tags.get("ACCESSIBLE_TOILET"));
+        mockMvc.perform(put("/api/v1/reviews/{reviewId}", reviewId)
+                        .header("Authorization", "Bearer " + applicant.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rating").value(2))
+                .andExpect(jsonPath("$.data.checks.length()").value(2))
+                .andExpect(jsonPath("$.data.checks[?(@.code=='WHEELCHAIR')].answer").value("NO"))
+                .andExpect(jsonPath("$.data.checks[?(@.code=='ACCESSIBLE_TOILET')].answer").value("YES"))
+                .andExpect(jsonPath("$.data.reactions[0]").value("HAD_DIFFICULTY"))
+                .andExpect(jsonPath("$.data.reactions.length()").value(1))
+                .andExpect(jsonPath("$.data.content").doesNotExist())
+                .andExpect(jsonPath("$.data.isPublic").value(false));
+
+        Map<Long, ConditionStatus> conditions = programConditionRepository
+                .findAllByProgramIdAndSource(application.getProgram().getId(), ConditionSource.REVIEW).stream()
+                .collect(Collectors.toMap(c -> c.getSupportTag().getId(), ProgramCondition::getStatus));
+        assertThat(conditions).containsOnly(
+                Map.entry(tags.get("WHEELCHAIR"), ConditionStatus.NOT_PROVIDED),
+                Map.entry(tags.get("EASY_WORDS"), ConditionStatus.NOT_PROVIDED),
+                Map.entry(tags.get("ACCESSIBLE_TOILET"), ConditionStatus.PROVIDED));
+
+        mockMvc.perform(put("/api/v1/reviews/{reviewId}", reviewId)
+                        .header("Authorization", "Bearer " + host.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/v1/reviews/{reviewId}", 999_999_999L)
+                        .header("Authorization", "Bearer " + applicant.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound());
     }
 
     @Test

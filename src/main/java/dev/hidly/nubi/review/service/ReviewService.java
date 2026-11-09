@@ -15,13 +15,16 @@ import dev.hidly.nubi.program.data.entity.ProgramCondition;
 import dev.hidly.nubi.program.data.enums.ConditionSource;
 import dev.hidly.nubi.program.data.enums.ConditionStatus;
 import dev.hidly.nubi.program.data.repository.ProgramConditionRepository;
-import dev.hidly.nubi.review.data.dto.request.ReviewCreateRequestDto;
+import dev.hidly.nubi.review.data.dto.request.ReviewRequestDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
 import dev.hidly.nubi.review.data.entity.Review;
 import dev.hidly.nubi.review.data.entity.ReviewCheck;
+import dev.hidly.nubi.review.data.enums.CheckAnswer;
 import dev.hidly.nubi.review.data.exception.InvalidReviewRequestException;
+import dev.hidly.nubi.review.data.exception.ReviewAccessDeniedException;
 import dev.hidly.nubi.review.data.exception.ReviewDuplicatedException;
 import dev.hidly.nubi.review.data.exception.ReviewNotAllowedException;
+import dev.hidly.nubi.review.data.exception.ReviewNotFoundException;
 import dev.hidly.nubi.review.data.repository.ReviewRepository;
 import dev.hidly.nubi.support.data.entity.SupportTag;
 import dev.hidly.nubi.support.data.exception.SupportTagNotFoundException;
@@ -32,6 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -53,7 +57,7 @@ public class ReviewService {
     private final NotificationService notificationService;
 
     @Transactional
-    public GlobalResponse<ReviewResponseDto> create(Long applicationId, ReviewCreateRequestDto request) {
+    public GlobalResponse<ReviewResponseDto> create(Long applicationId, ReviewRequestDto request) {
         Application application = applicationRepository.findWithProgramById(applicationId)
                 .orElseThrow(ApplicationNotFoundException::new);
         if (!application.getApplicantOrganization().getId().equals(SecurityUtil.getOrganizationId())) {
@@ -98,12 +102,33 @@ public class ReviewService {
         return GlobalResponse.ok(ReviewResponseDto.from(review));
     }
 
+    // 쓸 때와 같은 내용을 통째로 다시 보낸다. 바뀐 그랬어요·아니었어요는 프로그램 조건에 다시 반영한다.
+    @Transactional
+    public GlobalResponse<ReviewResponseDto> update(Long reviewId, ReviewRequestDto request) {
+        Review review = reviewRepository.findById(reviewId).orElseThrow(ReviewNotFoundException::new);
+        if (!review.getAuthorOrganization().getId().equals(SecurityUtil.getOrganizationId())) {
+            throw new ReviewAccessDeniedException();
+        }
+        Map<Long, SupportTag> tags = findSupportTags(request.checksOrEmpty());
+
+        review.update(request.getRating(), trimToNull(request.getContent()), trimToNull(request.getMismatchNote()),
+                request.isPublicOrDefault(), request.reactionsOrEmpty());
+        Map<SupportTag, CheckAnswer> answers = new LinkedHashMap<>();
+        request.checksOrEmpty().forEach(check -> answers.put(tags.get(check.getSupportTagId()), check.getAnswer()));
+        review.replaceChecks(answers);
+        reflectToConditions(review.getProgram(), request.checksOrEmpty(), tags);
+        log.info("[updateReview] 후기 수정: reviewId={}, 별점 {}, 확인 항목 {}개",
+                reviewId, review.getRating(), review.getChecks().size());
+
+        return GlobalResponse.ok(ReviewResponseDto.from(review));
+    }
+
     // 그랬어요·아니었어요는 프로그램 조건(source REVIEW)에 남겨 다음 기관의 참여 판정에 쓴다. 몰라요는 건드리지 않는다.
-    private void reflectToConditions(Program program, List<ReviewCreateRequestDto.Check> checks, Map<Long, SupportTag> tags) {
+    private void reflectToConditions(Program program, List<ReviewRequestDto.Check> checks, Map<Long, SupportTag> tags) {
         Map<Long, ProgramCondition> existing = programConditionRepository
                 .findAllByProgramIdAndSource(program.getId(), ConditionSource.REVIEW).stream()
                 .collect(Collectors.toMap(condition -> condition.getSupportTag().getId(), Function.identity(), (a, b) -> a));
-        for (ReviewCreateRequestDto.Check check : checks) {
+        for (ReviewRequestDto.Check check : checks) {
             ConditionStatus status = check.getAnswer().toConditionStatus();
             if (status == null) {
                 continue;
@@ -123,11 +148,11 @@ public class ReviewService {
         }
     }
 
-    private Map<Long, SupportTag> findSupportTags(List<ReviewCreateRequestDto.Check> checks) {
+    private Map<Long, SupportTag> findSupportTags(List<ReviewRequestDto.Check> checks) {
         if (checks.isEmpty()) {
             return Map.of();
         }
-        List<Long> ids = checks.stream().map(ReviewCreateRequestDto.Check::getSupportTagId).toList();
+        List<Long> ids = checks.stream().map(ReviewRequestDto.Check::getSupportTagId).toList();
         if (Set.copyOf(ids).size() != ids.size()) {
             throw new InvalidReviewRequestException();
         }
