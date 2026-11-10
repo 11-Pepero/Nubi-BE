@@ -24,9 +24,11 @@ public record MyApplicationSummaryResponseDto(
         ApplyMethod channel,
         ApplicationStatus status,
         ApplicationStep step,
-        LocalDateTime submittedAt
+        LocalDateTime submittedAt,
+        Long reviewId
 ) {
-    public static MyApplicationSummaryResponseDto from(Application application) {
+    // reviewId = 이 신청으로 쓴 후기 ID(없으면 null). 있으면 "후기 보기·수정", 없고 step이 REVIEW면 "후기 남기기"
+    public static MyApplicationSummaryResponseDto from(Application application, Long reviewId) {
         Program program = application.getProgram();
         return new MyApplicationSummaryResponseDto(
                 application.getId(),
@@ -43,6 +45,7 @@ public record MyApplicationSummaryResponseDto(
                 application.getChannel(),
                 application.getStatus(),
                 ApplicationStep.of(application.getStatus()),
-                application.getSubmittedAt());
+                application.getSubmittedAt(),
+                reviewId);
     }
 }
