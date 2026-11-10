@@ -19,6 +19,7 @@ public class NoticeCollectService {
     private final NoticeStore noticeStore;
     private final VenueResolver venueResolver;
     private final ProgramStatusService programStatusService;
+    private final VenueFacilitySync venueFacilitySync;
 
     public Map<String, Integer> collectAll() {
         return collect(collectors);
@@ -48,6 +49,12 @@ public class NoticeCollectService {
             savedByDataset.put(collector.dataset(), saved);
         }
         int located = venueResolver.fillMissingLocations();
+        // 좌표·주소를 찾은 뒤에 장소별 편의시설을 공공데이터로 채운다.
+        try {
+            venueFacilitySync.syncAll();
+        } catch (RuntimeException e) {
+            log.warn("[NoticeCollectService] 장소 편의시설 채우기 실패", e);
+        }
         programStatusService.refresh();
         log.info("[NoticeCollectService] 공고 수집 완료: 새 공고 {}, 좌표 채운 장소 {}곳", savedByDataset, located);
         return savedByDataset;
