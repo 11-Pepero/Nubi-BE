@@ -182,10 +182,18 @@ public class EventService {
                 .collect(Collectors.toMap(image -> image.getProgram().getId(), ProgramImage::getUrl, (a, b) -> a));
 
         Map<Long, EventApplicationStats> stats = eventApplicationService.statsOf(eventIds);
+        Map<Long, Object[]> reviews = eventIds.isEmpty() ? Map.of()
+                : applicationRepository.reviewStatsByProgramIds(eventIds).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> row));
 
-        return GlobalResponse.ok(PageResponse.from(events.map(event -> EventSummaryResponseDto.of(event,
-                thumbnails.get(event.getId()),
-                stats.getOrDefault(event.getId(), EventApplicationStats.empty(event.getId()))))));
+        return GlobalResponse.ok(PageResponse.from(events.map(event -> {
+            Object[] review = reviews.get(event.getId());
+            return EventSummaryResponseDto.of(event,
+                    thumbnails.get(event.getId()),
+                    stats.getOrDefault(event.getId(), EventApplicationStats.empty(event.getId())),
+                    review == null ? 0 : ((Number) review[1]).intValue(),
+                    review == null || review[2] == null ? null : ((Number) review[2]).doubleValue());
+        })));
     }
 
     @Transactional(readOnly = true)
@@ -201,7 +209,8 @@ public class EventService {
                 ApplicationStatus.CONFIRMED, monthStart, monthStart.plusMonths(1)).getFirst();
 
         return GlobalResponse.ok(new EventDashboardResponseDto(ongoing, past, draft, newApplications,
-                ((Number) people[0]).longValue(), ((Number) people[1]).longValue()));
+                ((Number) people[0]).longValue(), ((Number) people[1]).longValue(),
+                applicationRepository.countReviewsForHost(organizationId)));
     }
 
     private void validate(EventCreateRequestDto request) {

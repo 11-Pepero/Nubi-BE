@@ -27,6 +27,7 @@ public enum ErrorCode {
     VENUE_NOT_FOUND("장소를 찾을 수 없습니다.", 404),
     IMAGE_NOT_FOUND("사진을 찾을 수 없습니다.", 404),
     APPLICATION_NOT_FOUND("신청을 찾을 수 없습니다.", 404),
+    DOCUMENT_NOT_FOUND("신청 서류를 찾을 수 없습니다.", 404),
     REVIEW_NOT_FOUND("후기를 찾을 수 없습니다.", 404),
     NOTIFICATION_NOT_FOUND("알림을 찾을 수 없습니다.", 404),
     METHOD_NOT_ALLOWED("지원하지 않는 HTTP 메서드입니다.", 405),

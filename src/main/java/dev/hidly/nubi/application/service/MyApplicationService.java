@@ -26,12 +26,16 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 // 신청한 기관이 자기 신청을 보는 기능 (API-29, 30, 31)
 @Service
 @RequiredArgsConstructor
 public class MyApplicationService {
     private static final Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+    // 후기를 쓸 수 있는 신청 상태 (후기 쓰기 API-50과 같게)
+    private static final Set<ApplicationStatus> REVIEWABLE = Set.of(ApplicationStatus.CONFIRMED, ApplicationStatus.ATTENDED);
 
     private final ApplicationRepository applicationRepository;
 
@@ -43,7 +47,12 @@ public class MyApplicationService {
         Page<Application> applications = statuses == null || statuses.isEmpty()
                 ? applicationRepository.findByApplicantOrganizationId(organizationId, pageable)
                 : applicationRepository.findByApplicantOrganizationIdAndStatusIn(organizationId, statuses, pageable);
-        return GlobalResponse.ok(PageResponse.from(applications.map(MyApplicationSummaryResponseDto::from)));
+        List<Long> applicationIds = applications.map(Application::getId).getContent();
+        Map<Long, Long> reviewIds = applicationIds.isEmpty() ? Map.of()
+                : applicationRepository.findReviewIdsByApplicationIds(applicationIds).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+        return GlobalResponse.ok(PageResponse.from(applications.map(application ->
+                MyApplicationSummaryResponseDto.from(application, reviewIds.get(application.getId())))));
     }
 
     @Transactional(readOnly = true)
@@ -70,7 +79,8 @@ public class MyApplicationService {
                 ApplicationStatus.CONFIRMED, now.isAfter(weekStart) ? now : weekStart, weekStart.plusWeeks(1));
 
         return GlobalResponse.ok(new MyApplicationCountResponseDto(preparing + waiting + upcoming + attended,
-                preparing, waiting, upcoming, upcomingThisWeek, attended, counts));
+                preparing, waiting, upcoming, upcomingThisWeek, attended,
+                applicationRepository.countReviewPending(organizationId, REVIEWABLE, now), counts));
     }
 
     @Transactional(readOnly = true)

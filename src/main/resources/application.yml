@@ -35,6 +35,9 @@ external:
     service-key: ${DATA_GO_KR_SERVICE_KEY:}
   kakao:
     rest-api-key: ${KAKAO_REST_API_KEY:}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-5.5}
   gg-data:
     # 경기데이터드림(data.gg.go.kr) 인증키. 장애인복지관 운영 프로그램 수집에 쓴다.
     key: ${GG_DATA_KEY:}
