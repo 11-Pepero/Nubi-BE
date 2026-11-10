@@ -7,11 +7,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.openpdf.text.pdf.PdfReader;
+import org.openpdf.text.pdf.parser.PdfTextExtractor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -21,8 +27,11 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -119,6 +128,36 @@ class ApplicationDocumentApiTest {
         Object firstIds = JsonPath.read(first, "$.data.documents[*].documentId");
         Object secondIds = JsonPath.read(second, "$.data.documents[*].documentId");
         assertThat(secondIds).isEqualTo(firstIds);
+    }
+
+    @Test
+    void 신청서를_한글이_들어간_PDF로_내려받는다() throws Exception {
+        Login host = signUp("용인시 문화재단");
+        Login applicant = signUp("용인 주간보호센터");
+        long applicationId = applicationWithWheelchairOnNotice(host, applicant);
+        String written = write(applicant, applicationId).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        List<Number> formIds = JsonPath.read(written, "$.data.documents[?(@.type=='FORM')].documentId");
+        long formId = formIds.getFirst().longValue();
+
+        MvcResult result = mockMvc.perform(get("/api/v1/applications/{applicationId}/documents/{docId}/pdf", applicationId, formId)
+                        .header("Authorization", "Bearer " + applicant.token()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString(".pdf")))
+                .andReturn();
+
+        byte[] pdf = result.getResponse().getContentAsByteArray();
+        assertThat(new String(pdf, 0, 4, StandardCharsets.US_ASCII)).isEqualTo("%PDF");
+        String text = new PdfTextExtractor(new PdfReader(pdf)).getTextFromPage(1);
+        assertThat(text).contains("프로그램 참가 신청서").contains("용인 주간보호센터");
+
+        mockMvc.perform(get("/api/v1/applications/{applicationId}/documents/{docId}/pdf", applicationId, formId)
+                        .header("Authorization", "Bearer " + host.token()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/applications/{applicationId}/documents/{docId}/pdf", applicationId, 999_999_999L)
+                        .header("Authorization", "Bearer " + applicant.token()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("DOCUMENT_NOT_FOUND"));
     }
 
     @Test

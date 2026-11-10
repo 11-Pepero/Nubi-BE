@@ -13,6 +13,7 @@ import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.document.data.dto.response.ApplicationDocumentsResponseDto;
 import dev.hidly.nubi.document.data.entity.ApplicationDocument;
 import dev.hidly.nubi.document.data.enums.DocumentType;
+import dev.hidly.nubi.document.data.exception.DocumentNotFoundException;
 import dev.hidly.nubi.document.data.repository.ApplicationDocumentRepository;
 import dev.hidly.nubi.organization.data.entity.Member;
 import dev.hidly.nubi.organization.data.repository.MemberRepository;
@@ -42,6 +43,7 @@ public class ApplicationDocumentService {
     private final MemberRepository memberRepository;
     private final EligibilityService eligibilityService;
     private final DocumentDraftWriter documentDraftWriter;
+    private final DocumentPdfRenderer documentPdfRenderer;
 
     // 신청서·문의 문자·통화 대본을 쓴다. 이미 있으면 다시 쓴다("다시 쓰기").
     @Transactional
@@ -75,6 +77,26 @@ public class ApplicationDocumentService {
 
         return GlobalResponse.ok(new ApplicationDocumentsResponseDto(applicationId, facts.confirmed(), facts.toAsk(),
                 documents.stream().map(ApplicationDocumentsResponseDto.Document::from).toList()));
+    }
+
+    public record PdfFile(String fileName, byte[] content) {
+    }
+
+    // 우리 기관 신청의 서류 한 장을 PDF로 내려준다.
+    @Transactional(readOnly = true)
+    public PdfFile pdf(Long applicationId, Long documentId) {
+        Application application = applicationRepository.findWithProgramById(applicationId)
+                .orElseThrow(ApplicationNotFoundException::new);
+        if (!application.isAppliedBy(SecurityUtil.getOrganizationId())) {
+            throw new ApplicationAccessDeniedException();
+        }
+        ApplicationDocument document = applicationDocumentRepository.findById(documentId)
+                .filter(found -> found.getApplication().getId().equals(applicationId))
+                .orElseThrow(DocumentNotFoundException::new);
+
+        String fileName = "%s_%s.pdf".formatted(application.getProgram().getTitle(),
+                DocumentPdfRenderer.titleOf(document.getType())).replaceAll("[\\\\/:*?\"<>|]", "_");
+        return new PdfFile(fileName, documentPdfRenderer.render(document.getType(), document.getContent()));
     }
 
     // 신청할 때 복사해 둔 지원 항목을 공고 조건과 견줘, 공고에 있는 것과 물어봐야 하는 것으로 나눈다.
