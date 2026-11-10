@@ -66,7 +66,7 @@ public class ReviewController {
     @GetMapping("/programs/{programId}/reviews")
     @Operation(summary = "프로그램 후기 목록", description = "다른 기관에도 공개한 후기(isPublic = true)만 최근 순으로 보여 줍니다. "
             + "작성 기관 이름, 별점, 다녀온 인원(이용자·동반), 지원 항목별 확인 결과, 반응, 내용, 사진을 줍니다. "
-            + "비공개 후기는 주최 기관의 받은 후기 목록에서만 보입니다.")
+            + "비공개 후기는 주최 기관의 받은 후기 목록에서만 보입니다. 프로그램 상세처럼 로그인 없이 볼 수 있습니다.")
     public GlobalResponse<PageResponse<ProgramReviewResponseDto>> getProgramReviews(
             @PathVariable Long programId,
             @RequestParam(defaultValue = "0") @Min(0) int page,

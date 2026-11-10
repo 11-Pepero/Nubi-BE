@@ -330,6 +330,10 @@ class ReviewApiTest {
                 .andExpect(jsonPath("$.data.content[0].reactions[0]").value("ENJOYED"))
                 .andExpect(jsonPath("$.data.content[0].imageUrls.length()").value(1));
 
+        mockMvc.perform(get("/api/v1/programs/{programId}/reviews", publicOne.getProgram().getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+
         mockMvc.perform(get("/api/v1/programs/{programId}/reviews", 999_999_999L)
                         .header("Authorization", "Bearer " + host.accessToken()))
                 .andExpect(status().isNotFound())
