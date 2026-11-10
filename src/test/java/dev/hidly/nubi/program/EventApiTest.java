@@ -25,7 +25,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
@@ -79,6 +81,11 @@ class EventApiTest {
                 .build());
     }
 
+    // 오늘 기준 며칠 뒤 그 시각. 날짜를 박아 두면 그날이 지나 "지난 날짜로 공개 불가"에 걸려 테스트가 깨진다.
+    private static String at(int daysFromNow, int hour) {
+        return LocalDate.now().plusDays(daysFromNow).atTime(hour, 0).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+    }
+
     private String eventJson(String title, String status, String startAt, String extra) {
         return """
                 {"title":"%s","status":"%s","startAt":"%s"%s}
@@ -102,14 +109,14 @@ class EventApiTest {
         long wheelchairId = tagId("WHEELCHAIR");
         long easyWordsId = tagId("EASY_WORDS");
         String extra = """
-                "category":"CULTURE","endAt":"2026-11-21T16:00:00","capacity":40,"venueId":%d,
+                "category":"CULTURE","endAt":"%s","capacity":40,"venueId":%d,
                 "conditions":[{"supportTagId":%d},{"supportTagId":%d,"status":"UNKNOWN","evidence":"쉬운 말 자료 준비 중"}]
-                """.formatted(venue.getId(), wheelchairId, easyWordsId);
+                """.formatted(at(21, 16), venue.getId(), wheelchairId, easyWordsId);
 
         String response = mockMvc.perform(post("/api/v1/events")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson("개관 30주년 가을 축제", "OPEN", "2026-11-21T13:00:00", extra)))
+                        .content(eventJson("개관 30주년 가을 축제", "OPEN", at(21, 13), extra)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.title").value("개관 30주년 가을 축제"))
@@ -136,7 +143,7 @@ class EventApiTest {
         mockMvc.perform(post("/api/v1/events")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson("겨울맞이 손뜨개 모임", "DRAFT", "2026-12-03T10:00:00", null)))
+                        .content(eventJson("겨울맞이 손뜨개 모임", "DRAFT", at(33, 10), null)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("DRAFT"));
     }
@@ -149,23 +156,23 @@ class EventApiTest {
         // 공개 중, 임시 저장 말고는 처음부터 만들 수 없다
         mockMvc.perform(post("/api/v1/events").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson("행사", "CLOSED", "2026-11-21T13:00:00", null)))
+                        .content(eventJson("행사", "CLOSED", at(21, 13), null)))
                 .andExpect(status().isBadRequest());
         // 끝나는 시각이 시작보다 빠르다
         mockMvc.perform(post("/api/v1/events").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson("행사", "OPEN", "2026-11-21T13:00:00", "\"endAt\":\"2026-11-21T12:00:00\"")))
+                        .content(eventJson("행사", "OPEN", at(21, 13), "\"endAt\":\"" + at(21, 12) + "\"")))
                 .andExpect(status().isBadRequest());
         // 같은 조건을 두 번 보냈다
         mockMvc.perform(post("/api/v1/events").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson("행사", "OPEN", "2026-11-21T13:00:00",
+                        .content(eventJson("행사", "OPEN", at(21, 13),
                                 "\"conditions\":[{\"supportTagId\":%d},{\"supportTagId\":%d}]".formatted(wheelchairId, wheelchairId))))
                 .andExpect(status().isBadRequest());
         // 제목이 비었다
         mockMvc.perform(post("/api/v1/events").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson(" ", "OPEN", "2026-11-21T13:00:00", null)))
+                        .content(eventJson(" ", "OPEN", at(21, 13), null)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -175,12 +182,12 @@ class EventApiTest {
 
         mockMvc.perform(post("/api/v1/events").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson("행사", "OPEN", "2026-11-21T13:00:00", "\"venueId\":999999999")))
+                        .content(eventJson("행사", "OPEN", at(21, 13), "\"venueId\":999999999")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("VENUE_NOT_FOUND"));
         mockMvc.perform(post("/api/v1/events").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson("행사", "OPEN", "2026-11-21T13:00:00", "\"conditions\":[{\"supportTagId\":999999999}]")))
+                        .content(eventJson("행사", "OPEN", at(21, 13), "\"conditions\":[{\"supportTagId\":999999999}]")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("SUPPORT_TAG_NOT_FOUND"));
     }
@@ -189,7 +196,7 @@ class EventApiTest {
     void 로그인하지_않으면_등록과_목록_모두_401() throws Exception {
         mockMvc.perform(post("/api/v1/events")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson("행사", "OPEN", "2026-11-21T13:00:00", null)))
+                        .content(eventJson("행사", "OPEN", at(21, 13), null)))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/events"))
                 .andExpect(status().isUnauthorized());
@@ -199,9 +206,9 @@ class EventApiTest {
     void 내_행사_목록은_내_기관_행사만_시작일_순으로_대표_사진과_함께_보여준다() throws Exception {
         String token = signUp("용인 주간보호센터");
         String otherToken = signUp("다른 복지관");
-        long later = createEvent(token, "겨울맞이 손뜨개 모임", "OPEN", "2026-12-03T10:00:00");
-        long sooner = createEvent(token, "어울림 합창 연습", "OPEN", "2026-11-14T15:00:00");
-        createEvent(otherToken, "다른 기관 행사", "OPEN", "2026-11-10T10:00:00");
+        long later = createEvent(token, "겨울맞이 손뜨개 모임", "OPEN", at(33, 10));
+        long sooner = createEvent(token, "어울림 합창 연습", "OPEN", at(14, 15));
+        createEvent(otherToken, "다른 기관 행사", "OPEN", at(10, 10));
         Program soonerEvent = programRepository.findById(sooner).orElseThrow();
         programImageRepository.save(ProgramImage.builder().program(soonerEvent).url("/uploads/cover.png").sortOrder(0).build());
 
@@ -219,10 +226,10 @@ class EventApiTest {
     @Test
     void 상태로_거르고_삭제된_행사는_빼고_보여준다() throws Exception {
         String token = signUp("용인 주간보호센터");
-        createEvent(token, "공개 행사", "OPEN", "2026-11-14T15:00:00");
-        createEvent(token, "임시 행사", "DRAFT", "2026-11-15T15:00:00");
-        long closed = createEvent(token, "마감 행사", "OPEN", "2026-11-16T15:00:00");
-        long deleted = createEvent(token, "지운 행사", "OPEN", "2026-11-17T15:00:00");
+        createEvent(token, "공개 행사", "OPEN", at(14, 15));
+        createEvent(token, "임시 행사", "DRAFT", at(15, 15));
+        long closed = createEvent(token, "마감 행사", "OPEN", at(16, 15));
+        long deleted = createEvent(token, "지운 행사", "OPEN", at(17, 15));
 
         Program closedEvent = programRepository.findById(closed).orElseThrow();
         ReflectionTestUtils.setField(closedEvent, "status", ProgramStatus.CLOSED);
@@ -244,7 +251,7 @@ class EventApiTest {
     @Test
     void 등록한_행사는_신청_방법이_바로_신청이다() throws Exception {
         String token = signUp("용인 주간보호센터");
-        long eventId = createEvent(token, "행사", "OPEN", "2026-11-21T13:00:00");
+        long eventId = createEvent(token, "행사", "OPEN", at(21, 13));
 
         assertThat(programRepository.findById(eventId).orElseThrow().getApplyMethod()).isEqualTo(ApplyMethod.DIRECT);
     }
