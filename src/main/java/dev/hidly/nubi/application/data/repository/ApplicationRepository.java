@@ -145,4 +145,33 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
               and p.deadlineAt >= :from and p.deadlineAt < :to
             """)
     List<Application> findPreparingByDeadlineBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    // ---- 후기 수 (후기 테이블은 C 파트, 여기서는 세기만 한다) ----
+
+    // 내 신청 요약 "후기 n건 남기기": 후기를 쓸 수 있는데 아직 안 쓴 신청 수.
+    // 후기 쓰기(API-50)와 같은 조건: 확정·다녀옴, 삭제되지 않은 프로그램, 시작 시각이 지났거나 비어 있음.
+    @Query("""
+            select count(a) from Application a join a.program p
+            where a.applicantOrganization.id = :organizationId and a.status in :statuses
+              and p.deletedAt is null and (p.startAt is null or p.startAt <= :now)
+              and not exists (select 1 from Review r where r.application = a)
+            """)
+    long countReviewPending(@Param("organizationId") Long organizationId,
+                            @Param("statuses") Collection<ApplicationStatus> statuses,
+                            @Param("now") LocalDateTime now);
+
+    // 내 신청 목록 한 줄마다 쓴 후기 ID: [신청 ID, 후기 ID]
+    @Query("select r.application.id, r.id from Review r where r.application.id in :applicationIds")
+    List<Object[]> findReviewIdsByApplicationIds(@Param("applicationIds") Collection<Long> applicationIds);
+
+    // 행사 관리 요약 "받은 후기": 내가 주최한(삭제되지 않은) 행사에 달린 후기 수. 공개·비공개 모두.
+    @Query("""
+            select count(r) from Review r
+            where r.program.hostOrganization.id = :organizationId and r.program.deletedAt is null
+            """)
+    long countReviewsForHost(@Param("organizationId") Long organizationId);
+
+    // 내 행사 목록 한 줄마다 [행사 ID, 후기 수, 평균 별점]
+    @Query("select r.program.id, count(r), avg(r.rating) from Review r where r.program.id in :programIds group by r.program.id")
+    List<Object[]> reviewStatsByProgramIds(@Param("programIds") Collection<Long> programIds);
 }
