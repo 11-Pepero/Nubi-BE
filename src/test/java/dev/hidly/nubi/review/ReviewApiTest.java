@@ -2,6 +2,7 @@ package dev.hidly.nubi.review;
 
 import com.jayway.jsonpath.JsonPath;
 import dev.hidly.nubi.application.data.entity.Application;
+import dev.hidly.nubi.common.ai.OpenAiClient;
 import dev.hidly.nubi.application.data.enums.ApplicationStatus;
 import dev.hidly.nubi.application.data.repository.ApplicationRepository;
 import dev.hidly.nubi.organization.data.repository.OrganizationRepository;
@@ -21,7 +22,9 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
@@ -29,6 +32,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -38,6 +42,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItem;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -62,6 +71,11 @@ class ReviewApiTest {
     private SupportTagRepository supportTagRepository;
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private ObjectMapper objectMapper;
+    // 테스트가 실제 OpenAI를 부르지 않게 한다. 기본은 꺼짐 → 집계로 만든 요약.
+    @MockitoBean
+    private OpenAiClient openAiClient;
 
     private record Login(String accessToken, Long organizationId) {
     }
@@ -437,6 +451,90 @@ class ReviewApiTest {
         replyTo(host, 999_999_999L, "답글")
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("REVIEW_NOT_FOUND"));
+    }
+
+    // 주최가 휠체어를 제공한다고 체크한 행사에 후기 두 개: 둘 다 휠체어 "아니었어요", 하나는 쉬는 시간 부족
+    private long eventWithTwoReviews(Login host) throws Exception {
+        Login first = signUp();
+        Login second = signUp();
+        Application firstApplication = application(host, first, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+        Map<String, Long> tags = tagIds();
+        programConditionRepository.save(ProgramCondition.builder().program(firstApplication.getProgram())
+                .supportTag(supportTagRepository.getReferenceById(tags.get("WHEELCHAIR")))
+                .status(ConditionStatus.PROVIDED).source(ConditionSource.HOST).build());
+        Application secondApplication = applicationRepository.save(Application.builder()
+                .program(firstApplication.getProgram())
+                .applicantOrganization(organizationRepository.getReferenceById(second.organizationId()))
+                .participantCount(3).companionCount(1).status(ApplicationStatus.CONFIRMED).build());
+        write(first, firstApplication.getId(), """
+                {"rating":3,"checks":[{"supportTagId":%d,"answer":"NO"}],"reactions":["SHORT_BREAKS"],
+                 "mismatchNote":"입구에 턱이 있었어요","content":"햇볕이 강해서 그늘막이 더 있었으면 좋겠어요."}
+                """.formatted(tags.get("WHEELCHAIR"))).andExpect(status().isOk());
+        write(second, secondApplication.getId(), """
+                {"rating":4,"checks":[{"supportTagId":%d,"answer":"NO"}],"content":"순서표가 어려웠어요."}
+                """.formatted(tags.get("WHEELCHAIR"))).andExpect(status().isOk());
+        return firstApplication.getProgram().getId();
+    }
+
+    private ResultActions summary(Login login, long eventId) throws Exception {
+        return mockMvc.perform(get("/api/v1/events/{eventId}/reviews/summary", eventId)
+                .header("Authorization", "Bearer " + login.accessToken()));
+    }
+
+    @Test
+    void AI_없이도_집계로_개선점을_만들고_공고와_엇갈린_지원_항목을_알려준다() throws Exception {
+        Login host = signUp();
+        long eventId = eventWithTwoReviews(host);
+
+        summary(host, eventId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reviewCount").value(2))
+                .andExpect(jsonPath("$.data.aiWritten").value(false))
+                .andExpect(jsonPath("$.data.summary").value("후기 2개, 평균 별점 3.5점이에요."))
+                .andExpect(jsonPath("$.data.improvements[0]").value("휠체어 다시 확인하기"))
+                .andExpect(jsonPath("$.data.improvements").value(hasItem("쉬는 시간 늘리기")))
+                .andExpect(jsonPath("$.data.conditionAlerts.length()").value(1))
+                .andExpect(jsonPath("$.data.conditionAlerts[0].code").value("WHEELCHAIR"))
+                .andExpect(jsonPath("$.data.conditionAlerts[0].noCount").value(2));
+    }
+
+    @Test
+    void AI가_쓴_요약을_쓰고_규칙을_어긴_개선점은_집계로_바꾼다() throws Exception {
+        Login host = signUp();
+        long eventId = eventWithTwoReviews(host);
+        given(openAiClient.isEnabled()).willReturn(true);
+        given(openAiClient.completeJson(anyString(), anyString())).willReturn(Optional.of(objectMapper.readTree("""
+                {"summary":"전반적으로 만족했지만 입구 턱과 햇볕이 아쉬웠어요.","improvements":["그늘막 늘리기","순서표를 그림으로 바꾸기"]}
+                """)));
+        summary(host, eventId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aiWritten").value(true))
+                .andExpect(jsonPath("$.data.summary").value("전반적으로 만족했지만 입구 턱과 햇볕이 아쉬웠어요."))
+                .andExpect(jsonPath("$.data.improvements[0]").value("그늘막 늘리기"))
+                .andExpect(jsonPath("$.data.conditionAlerts.length()").value(1));
+
+        given(openAiClient.completeJson(anyString(), anyString())).willReturn(Optional.of(objectMapper.readTree("""
+                {"summary":"좋았어요.","improvements":["%s"]}
+                """.formatted("아주 긴 개선점 ".repeat(10)))));
+        summary(host, eventId)
+                .andExpect(jsonPath("$.data.summary").value("좋았어요."))
+                .andExpect(jsonPath("$.data.improvements[0]").value("휠체어 다시 확인하기"));
+    }
+
+    @Test
+    void 후기가_없으면_AI를_부르지_않고_주최가_아니면_403() throws Exception {
+        Login host = signUp();
+        Login applicant = signUp();
+        Application application = application(host, applicant, LocalDateTime.now().minusDays(1), ApplicationStatus.CONFIRMED);
+        given(openAiClient.isEnabled()).willReturn(true);
+
+        summary(host, application.getProgram().getId())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reviewCount").value(0))
+                .andExpect(jsonPath("$.data.improvements.length()").value(0));
+        verify(openAiClient, never()).completeJson(anyString(), anyString());
+
+        summary(applicant, application.getProgram().getId()).andExpect(status().isForbidden());
     }
 
     @Test
