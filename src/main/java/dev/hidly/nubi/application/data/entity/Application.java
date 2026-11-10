@@ -138,6 +138,13 @@ public class Application extends BaseTimeEntity {
         this.decidedAt = next == ApplicationStatus.WAITING ? null : LocalDateTime.now();
     }
 
+    // 후기를 쓰면 다녀온 것으로 본다 (CONFIRMED → ATTENDED)
+    public void markAttended() {
+        if (status == ApplicationStatus.CONFIRMED) {
+            this.status = ApplicationStatus.ATTENDED;
+        }
+    }
+
     // 신청 기관의 취소: 거절·취소·다녀옴이 아니면 참여 전까지 가능
     public void cancelByApplicant(LocalDateTime now) {
         boolean finished = status == ApplicationStatus.REJECTED || status == ApplicationStatus.CANCELLED

@@ -73,6 +73,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/programs",
                                 "/api/v1/programs/{programId:\\d+}",
+                                "/api/v1/programs/{programId:\\d+}/reviews",
                                 "/api/v1/venues/{venueId:\\d+}/facilities"
                         ).permitAll()
                         .anyRequest().authenticated()

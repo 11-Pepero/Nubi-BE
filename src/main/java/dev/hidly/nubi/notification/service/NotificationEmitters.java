@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-// ponytail: 연결을 서버 메모리에 보관, 서버를 여러 대로 늘리면 Redis pub/sub으로 다른 서버에 전달
+// 연결을 서버 메모리에 보관, 서버를 여러 대로 늘리면 Redis pub/sub으로 다른 서버에 전달
 @Component
 public class NotificationEmitters {
     private static final long TIMEOUT_MILLIS = 30 * 60 * 1000L;

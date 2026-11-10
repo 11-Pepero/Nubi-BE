@@ -14,6 +14,8 @@ import java.util.List;
 public interface ProgramConditionRepository extends JpaRepository<ProgramCondition, Long> {
     List<ProgramCondition> findAllByProgramIdOrderByIdAsc(Long programId);
 
+    List<ProgramCondition> findAllByProgramIdAndSource(Long programId, ConditionSource source);
+
     // 행사 수정 때 주최가 넣은 조건(HOST)만 지우고 다시 넣는다. AI·후기 출처 조건은 남긴다.
     @Modifying(flushAutomatically = true)
     @Query("delete from ProgramCondition c where c.program.id = :programId and c.source = :source")

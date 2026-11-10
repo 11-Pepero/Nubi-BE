@@ -53,4 +53,10 @@ public class ProgramCondition extends BaseTimeEntity {
         this.source = source;
         this.confidence = confidence;
     }
+
+    // 후기로 확인한 조건은 가장 최근 후기 값으로 덮는다.
+    public void changeStatus(ConditionStatus status, String evidence) {
+        this.status = status;
+        this.evidence = evidence;
+    }
 }
