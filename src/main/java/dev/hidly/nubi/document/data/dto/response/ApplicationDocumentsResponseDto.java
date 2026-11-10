@@ -11,6 +11,8 @@ public record ApplicationDocumentsResponseDto(
         Long applicationId,
         List<String> confirmed,
         List<String> toAsk,
+        // true면 AI가 다듬은 서류, false면 AI 없이 쓴 초안(키가 없거나 AI 호출이 실패한 경우)
+        boolean aiWritten,
         List<Document> documents
 ) {
     public record Document(Long documentId, DocumentType type, String content, LocalDateTime updatedAt) {

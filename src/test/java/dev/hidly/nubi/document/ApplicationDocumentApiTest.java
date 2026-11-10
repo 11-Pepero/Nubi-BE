@@ -1,6 +1,7 @@
 package dev.hidly.nubi.document;
 
 import com.jayway.jsonpath.JsonPath;
+import dev.hidly.nubi.common.ai.OpenAiClient;
 import dev.hidly.nubi.support.data.entity.SupportTag;
 import dev.hidly.nubi.support.data.repository.SupportTagRepository;
 import org.junit.jupiter.api.Test;
@@ -11,18 +12,23 @@ import org.openpdf.text.pdf.PdfReader;
 import org.openpdf.text.pdf.parser.PdfTextExtractor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
@@ -42,6 +48,11 @@ class ApplicationDocumentApiTest {
     private MockMvc mockMvc;
     @Autowired
     private SupportTagRepository supportTagRepository;
+    @Autowired
+    private ObjectMapper objectMapper;
+    // 테스트가 실제 OpenAI를 부르지 않게 한다(local-secret.properties에 키가 있어도). 기본은 꺼짐 → 초안 사용.
+    @MockitoBean
+    private OpenAiClient openAiClient;
 
     private record Login(String token) {
     }
@@ -158,6 +169,38 @@ class ApplicationDocumentApiTest {
                         .header("Authorization", "Bearer " + applicant.token()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("DOCUMENT_NOT_FOUND"));
+    }
+
+    @Test
+    void AI가_다듬은_서류를_쓰고_규칙에_안_맞는_서류는_초안을_쓴다() throws Exception {
+        Login host = signUp("용인시 문화재단");
+        Login applicant = signUp("용인 주간보호센터");
+        long applicationId = applicationWithWheelchairOnNotice(host, applicant);
+        given(openAiClient.isEnabled()).willReturn(true);
+        // 신청서는 제목 줄이 빠져서 쓰지 않고, 문의 문자·통화 대본은 AI 글을 쓴다.
+        given(openAiClient.completeJson(anyString(), anyString())).willReturn(Optional.of(objectMapper.readTree("""
+                {"form":"제목 없는 신청서","inquiry":"안녕하세요, 쉬운 말 안내가 가능한지 여쭤봐요.","callScript":"\\"쉬운 말 안내 가능할까요?\\""}
+                """)));
+
+        write(applicant, applicationId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aiWritten").value(true))
+                .andExpect(jsonPath("$.data.documents[?(@.type=='INQUIRY')].content").value(hasItem("안녕하세요, 쉬운 말 안내가 가능한지 여쭤봐요.")))
+                .andExpect(jsonPath("$.data.documents[?(@.type=='FORM')].content").value(hasItem(containsString("신청 기관: 용인 주간보호센터"))));
+    }
+
+    @Test
+    void AI_호출이_실패하면_초안으로_쓴다() throws Exception {
+        Login host = signUp("용인시 문화재단");
+        Login applicant = signUp("용인 주간보호센터");
+        long applicationId = applicationWithWheelchairOnNotice(host, applicant);
+        given(openAiClient.isEnabled()).willReturn(true);
+        given(openAiClient.completeJson(anyString(), anyString())).willReturn(Optional.empty());
+
+        write(applicant, applicationId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aiWritten").value(false))
+                .andExpect(jsonPath("$.data.documents[?(@.type=='INQUIRY')].content").value(hasItem(containsString("쉬운 말 안내이(가) 가능한지"))));
     }
 
     @Test

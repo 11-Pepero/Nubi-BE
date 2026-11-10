@@ -35,6 +35,9 @@ external:
     service-key: ${DATA_GO_KR_SERVICE_KEY:}
   kakao:
     rest-api-key: ${KAKAO_REST_API_KEY:}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-5.5}
 
 collect:
   enabled: ${COLLECT_ENABLED:false}

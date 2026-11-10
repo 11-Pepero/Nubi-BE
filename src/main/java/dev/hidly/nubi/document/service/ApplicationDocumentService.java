@@ -44,6 +44,7 @@ public class ApplicationDocumentService {
     private final EligibilityService eligibilityService;
     private final DocumentDraftWriter documentDraftWriter;
     private final DocumentPdfRenderer documentPdfRenderer;
+    private final DocumentAiPolisher documentAiPolisher;
 
     // 신청서·문의 문자·통화 대본을 쓴다. 이미 있으면 다시 쓴다("다시 쓰기").
     @Transactional
@@ -61,8 +62,9 @@ public class ApplicationDocumentService {
         Map<DocumentType, ApplicationDocument> existing = applicationDocumentRepository
                 .findAllByApplicationIdOrderByIdAsc(applicationId).stream()
                 .collect(Collectors.toMap(ApplicationDocument::getType, Function.identity()));
+        DocumentAiPolisher.Result written = documentAiPolisher.polish(facts, documentDraftWriter.write(facts));
         List<ApplicationDocument> documents = new ArrayList<>();
-        documentDraftWriter.write(facts).forEach((type, content) -> {
+        written.documents().forEach((type, content) -> {
             ApplicationDocument document = existing.get(type);
             if (document == null) {
                 document = applicationDocumentRepository.save(ApplicationDocument.builder()
@@ -73,10 +75,11 @@ public class ApplicationDocumentService {
             documents.add(document);
         });
         applicationDocumentRepository.flush();
-        log.info("[writeDocuments] 신청 서류 작성: applicationId={}, 확인 필요 {}개", applicationId, facts.toAsk().size());
+        log.info("[writeDocuments] 신청 서류 작성: applicationId={}, 확인 필요 {}개, AI {}",
+                applicationId, facts.toAsk().size(), written.aiWritten());
 
         return GlobalResponse.ok(new ApplicationDocumentsResponseDto(applicationId, facts.confirmed(), facts.toAsk(),
-                documents.stream().map(ApplicationDocumentsResponseDto.Document::from).toList()));
+                written.aiWritten(), documents.stream().map(ApplicationDocumentsResponseDto.Document::from).toList()));
     }
 
     public record PdfFile(String fileName, byte[] content) {
