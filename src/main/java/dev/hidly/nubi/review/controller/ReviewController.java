@@ -10,9 +10,11 @@ import dev.hidly.nubi.review.data.dto.response.ReceivedReviewsResponseDto;
 import dev.hidly.nubi.review.data.enums.ReviewSort;
 import dev.hidly.nubi.review.data.dto.response.ReviewImageResponseDto;
 import dev.hidly.nubi.review.data.dto.response.ReviewResponseDto;
+import dev.hidly.nubi.review.data.dto.response.ReviewSummaryResponseDto;
 import dev.hidly.nubi.review.service.ReviewImageService;
 import dev.hidly.nubi.review.service.ReviewReplyService;
 import dev.hidly.nubi.review.service.ReviewService;
+import dev.hidly.nubi.review.service.ReviewSummaryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -41,6 +43,16 @@ public class ReviewController {
     private final ReviewService reviewService;
     private final ReviewImageService reviewImageService;
     private final ReviewReplyService reviewReplyService;
+    private final ReviewSummaryService reviewSummaryService;
+
+    @GetMapping("/events/{eventId}/reviews/summary")
+    @Operation(summary = "받은 후기 요약", description = "주최 기관만 볼 수 있습니다. AI가 이 행사의 후기(별점, 내용, 달랐던 점, 반응, 확인 결과)를 읽고 "
+            + "summary(한두 문장)와 improvements(다음 행사 개선점, 최대 5개)를 씁니다. AI에는 기관 이름을 넘기지 않습니다. "
+            + "conditionAlerts는 주최가 제공한다고 체크했는데 후기에서 '아니었어요'가 나온 지원 항목으로, AI가 아니라 집계로 찾습니다. "
+            + "후기가 없으면 AI를 부르지 않고, aiWritten이 false면 AI 없이 집계로 만든 요약입니다.")
+    public GlobalResponse<ReviewSummaryResponseDto> getSummary(@PathVariable Long eventId) {
+        return reviewSummaryService.summarize(eventId);
+    }
 
     @PostMapping("/applications/{applicationId}/review")
     @Operation(summary = "후기 쓰기", description = "우리 기관 신청에 후기를 남깁니다. 참여 확정(CONFIRMED) 또는 다녀왔어요(ATTENDED) 상태이고 "

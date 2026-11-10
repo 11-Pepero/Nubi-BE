@@ -30,6 +30,9 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
             """)
     Page<Review> findReceived(@Param("programId") Long programId, @Param("photoOnly") boolean photoOnly, Pageable pageable);
 
+    // 받은 후기 요약용: 한 행사의 후기 전부(최근 순). 확인 항목·반응은 배치로 읽는다.
+    List<Review> findAllByProgramIdOrderByCreatedAtDesc(Long programId);
+
     // [후기 수, 평균 별점]
     @Query("select count(r), avg(r.rating) from Review r where r.program.id = :programId")
     List<Object[]> countAndAverageRating(@Param("programId") Long programId);
