@@ -30,4 +30,11 @@ class KakaoLocalClientTest {
         assertThat(KakaoLocalClient.isAuxiliary(new PlaceCandidate("2", "에버랜드 매표소", "매표소", null, "주소", null, 37, 127))).isTrue();
         assertThat(KakaoLocalClient.isAuxiliary(new PlaceCandidate("3", "용인포은아트홀", "공연장,연극극장", null, "주소", null, 37, 127))).isFalse();
     }
+
+    @Test
+    void 주소가_용인시가_아닌_장소는_뺀다() {
+        assertThat(KakaoLocalClient.isInYongin(new PlaceCandidate("1", "포은아파트", "아파트", "경기 의왕시 위인로 15", "경기 의왕시 내손동 1", null, 37, 127))).isFalse();
+        assertThat(KakaoLocalClient.isInYongin(new PlaceCandidate("2", "용인포은아트홀", "공연장", "경기 용인시 수지구 포은대로 499", null, null, 37, 127))).isTrue();
+        assertThat(KakaoLocalClient.isInYongin(new PlaceCandidate("3", "어느 곳", null, null, "경기 용인시 처인구 김량장동 1", null, 37, 127))).isTrue();
+    }
 }

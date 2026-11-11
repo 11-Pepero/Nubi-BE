@@ -82,7 +82,8 @@ public class KakaoLocalClient {
                     .uri(UriComponentsBuilder.fromUriString(KEYWORD_URL)
                             .queryParam("query", query.trim())
                             .queryParam("rect", YONGIN_RECT)
-                            .queryParam("size", Math.max(1, Math.min(size, MAX_CANDIDATES)))
+                            // 용인 밖 장소를 빼고도 size만큼 남게 늘 최대 개수로 받는다
+                            .queryParam("size", MAX_CANDIDATES)
                             .encode().build().toUri())
                     .header("Authorization", "KakaoAK " + restApiKey.trim())
                     .retrieve()
@@ -96,6 +97,9 @@ public class KakaoLocalClient {
                         .map(KakaoLocalClient::toCandidate)
                         // 같은 건물의 주차장·매표소 같은 부속 장소는 행사 장소가 아니라서 뺀다
                         .filter(place -> !isAuxiliary(place))
+                        // 사각형 범위가 의왕·수원 일부까지 덮어서 주소로 한 번 더 거른다
+                        .filter(KakaoLocalClient::isInYongin)
+                        .limit(Math.max(1, Math.min(size, MAX_CANDIDATES)))
                         .toList();
             }
         } catch (RuntimeException e) {
@@ -137,6 +141,11 @@ public class KakaoLocalClient {
         String address = road == null || road.isBlank() ? (String) document.get("address_name") : road;
         return new Place((String) document.get("place_name"), address,
                 Double.parseDouble(String.valueOf(document.get("y"))), Double.parseDouble(String.valueOf(document.get("x"))));
+    }
+
+    static boolean isInYongin(PlaceCandidate place) {
+        return (place.roadAddress() != null && place.roadAddress().contains("용인시"))
+                || (place.address() != null && place.address().contains("용인시"));
     }
 
     static boolean isAuxiliary(PlaceCandidate place) {
