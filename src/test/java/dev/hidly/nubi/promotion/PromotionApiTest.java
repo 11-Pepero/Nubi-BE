@@ -182,10 +182,22 @@ class PromotionApiTest {
                 .andReturn().getResponse().getContentAsByteArray();
     }
 
+    // 대표 사진이 들어갔는지. 그라데이션용 1px 그림은 사진으로 치지 않는다.
     private static boolean hasImage(byte[] pdf) throws Exception {
         PdfReader reader = new PdfReader(pdf);
         var resources = reader.getPageN(1).getAsDict(PdfName.RESOURCES);
-        return resources != null && resources.getAsDict(PdfName.XOBJECT) != null;
+        var xObjects = resources == null ? null : resources.getAsDict(PdfName.XOBJECT);
+        if (xObjects == null) {
+            return false;
+        }
+        for (PdfName name : xObjects.getKeys()) {
+            var image = (org.openpdf.text.pdf.PdfDictionary) PdfReader.getPdfObject(xObjects.get(name));
+            var width = image.getAsNumber(PdfName.WIDTH);
+            if (width != null && width.intValue() > 1) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Test
@@ -199,8 +211,9 @@ class PromotionApiTest {
 
         byte[] pdf = poster(token, eventId, null);
         String text = new PdfTextExtractor(new PdfReader(pdf)).getTextFromPage(1);
-        assertThat(text).contains("함께 걷는 가을 축제").contains("정원  40명").contains("센터 강당")
-                .contains("휠체어로 다닐 수 있어요.").contains("주최 용인 주간보호센터");
+        assertThat(text).contains("함께 걷는 가을 축제").contains("40명").contains("센터 강당")
+                .contains("휠체어로 다닐 수 있어요.").contains("주최 용인 주간보호센터")
+                .contains("이렇게 준비했어요").contains("승강기").contains("누비에서 신청");
         assertThat(hasImage(pdf)).isTrue();
         verify(openAiClient, never()).completeJson(anyString(), anyString());
     }
