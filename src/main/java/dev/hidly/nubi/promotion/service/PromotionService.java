@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -71,22 +70,15 @@ public class PromotionService {
         PromotionWriter.Facts facts = factsOf(program);
         String easy = editedEasy == null || editedEasy.isBlank() ? promotionWriter.easy(facts) : editedEasy.trim();
 
-        List<String> infoLines = new ArrayList<>();
-        if (facts.startAt() != null) {
-            infoLines.add("일시  " + PromotionWriter.generalWhen(facts));
-        }
-        if (facts.venueName() != null) {
-            infoLines.add("장소  " + facts.venueName());
-        }
-        if (facts.capacity() != null) {
-            infoLines.add("정원  %d명".formatted(facts.capacity()));
-        }
         byte[] photo = programImageRepository.findAllByProgramIdOrderBySortOrderAsc(eventId).stream()
                 .findFirst()
                 .map(image -> readUpload(image.getUrl()))
                 .orElse(null);
 
-        byte[] pdf = posterPdfRenderer.render(new PosterPdfRenderer.Poster(facts.title(), infoLines, easy, facts.hostName(), photo));
+        byte[] pdf = posterPdfRenderer.render(new PosterPdfRenderer.Poster(facts.title(), facts.category(),
+                PromotionWriter.hook(facts.category()), facts.hostName(), facts.startAt(), facts.endAt(), facts.venueName(),
+                program.getVenue() == null ? null : program.getVenue().getAddress(), facts.capacity(), facts.deadlineAt(),
+                facts.applyMethod(), program.getApplyUrl(), facts.contactPhone(), easy, facts.supports(), facts.facilities(), photo));
         log.info("[poster] 포스터 PDF: eventId={}, 사진 {}, 고친 문구 {}", eventId, photo != null, editedEasy != null && !editedEasy.isBlank());
         return new PosterFile((facts.title() + "_포스터.pdf").replaceAll("[\\\\/:*?\"<>|]", "_"), pdf);
     }
@@ -138,6 +130,23 @@ public class PromotionService {
                 provided.stream().map(condition -> condition.getSupportTag().getLabel()).toList(),
                 provided.stream().map(condition -> condition.getSupportTag().getCode()).toList(),
                 facilities.stream().map(FACILITY_LABELS::get).toList(),
-                facilities.stream().map(Enum::name).toList());
+                facilities.stream().map(Enum::name).toList(),
+                program.getCategory() == null ? null : program.getCategory().name(),
+                program.getDeadlineAt(),
+                applyMethodLabel(program),
+                program.getContactPhone());
+    }
+
+    // 홍보문·포스터에 쓰는 신청 방법 한 줄
+    static String applyMethodLabel(Program program) {
+        if (program.getApplyMethod() == null) {
+            return null;
+        }
+        return switch (program.getApplyMethod()) {
+            case DIRECT -> "누비에서 신청";
+            case ONLINE -> "온라인 신청";
+            case PHONE -> "전화 신청";
+            case PAPER -> "신청서 제출";
+        };
     }
 }
