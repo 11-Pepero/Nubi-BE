@@ -1,0 +1,12 @@
+.git
+.github
+.gradle
+.idea
+.omc
+build
+uploads
+docker
+deploy
+local-secret.properties
+.env
+*.md
