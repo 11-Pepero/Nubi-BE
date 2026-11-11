@@ -33,6 +33,8 @@ springdoc:
 external:
   data-go-kr:
     service-key: ${DATA_GO_KR_SERVICE_KEY:}
+    # 한국관광공사 무장애 여행 정보(15101897)를 활용신청한 계정의 키. 비우면 무장애 여행 정보는 쓰지 않는다.
+    barrier-free-key: ${BARRIER_FREE_SERVICE_KEY:}
   kakao:
     rest-api-key: ${KAKAO_REST_API_KEY:}
   openai:
