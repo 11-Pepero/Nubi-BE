@@ -89,6 +89,8 @@ jobs:
         working-directory: ${{ env.DEPLOY_PATH }}
         run: |
           docker compose -f docker-compose.prod.yml pull app
+          # 손으로 compose를 다시 실행할 때도 이 이미지를 쓰도록 표시해 둔다
+          docker tag "$APP_IMAGE" nubi-be:current
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
       - name: 앱이 뜰 때까지 기다리기 (최대 3분)
