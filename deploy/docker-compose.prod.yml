@@ -1,8 +1,9 @@
 # 서버에서 쓰는 compose. 같은 폴더의 .env 값을 읽는다 (항목은 deploy/README.md 참고).
-# CD가 이 파일을 서버의 배포 폴더로 복사하고, APP_IMAGE를 새 이미지로 바꿔 띄운다.
+# CD가 이 파일을 서버의 배포 폴더로 복사하고, 배포한 이미지를 nubi-be:current 로 표시해 띄운다.
+# 서버에서 손으로 up 해도 마지막으로 배포한 이미지를 그대로 쓴다 (GHCR 로그인 필요 없음).
 services:
   app:
-    image: ${APP_IMAGE:-ghcr.io/11-pepero/nubi-be:latest}
+    image: ${APP_IMAGE:-nubi-be:current}
     container_name: nubi-app
     restart: unless-stopped
     env_file: .env
