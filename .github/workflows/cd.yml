@@ -105,7 +105,7 @@ jobs:
             set -eu
             cd "$DEPLOY_PATH"
             if [ ! -f .env ]; then
-              echo "$DEPLOY_PATH/.env 가 없습니다. deploy/.env.example 을 복사해 값을 채워 주세요." >&2
+              echo "$DEPLOY_PATH/.env 가 없습니다. deploy/README.md 의 항목대로 만들어 주세요." >&2
               exit 1
             fi
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin

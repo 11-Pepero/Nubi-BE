@@ -1,4 +1,4 @@
-# 서버에서 쓰는 compose. 같은 폴더의 .env 값을 읽는다 (.env.example 참고).
+# 서버에서 쓰는 compose. 같은 폴더의 .env 값을 읽는다 (항목은 deploy/README.md 참고).
 # CD가 이 파일을 서버의 배포 폴더로 복사하고, APP_IMAGE를 새 이미지로 바꿔 띄운다.
 services:
   app:

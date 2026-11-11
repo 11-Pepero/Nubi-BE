@@ -21,10 +21,23 @@ sudo usermod -aG docker $USER   # 다시 로그인해야 적용
 # 2. 배포 폴더와 .env
 sudo mkdir -p /opt/nubi && sudo chown $USER /opt/nubi
 cd /opt/nubi
-# 저장소의 deploy/.env.example 내용을 .env 로 만들어 값을 채운다
+# 아래 "서버 .env 항목"을 보고 .env 를 만든다
 vi .env
 chmod 600 .env
 ```
+
+### 서버 .env 항목
+
+| 이름 | 필수 | 설명 |
+|---|---|---|
+| `APP_PORT` |  | 서버 바깥 포트, 기본 8080 |
+| `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD` | O | compose 안 PostGIS의 DB 이름·계정 |
+| `REDIS_PASSWORD` | O | Redis 비밀번호 |
+| `JWT_SECRET_KEY` | O | Base64 256비트 이상 (`openssl rand -base64 48`) |
+| `CORS_ALLOWED_ORIGINS` | O | 프론트 주소, 여러 개면 쉼표로 |
+| `DATA_GO_KR_SERVICE_KEY`, `BARRIER_FREE_SERVICE_KEY`, `KAKAO_REST_API_KEY`, `OPENAI_API_KEY`, `GG_DATA_KEY` |  | 외부 API 키. 비우면 그 기능만 꺼집니다 |
+| `COLLECT_ENABLED`, `COLLECT_RUN_ON_STARTUP` |  | 공공데이터 수집 (매일 새벽 5시) |
+| `SPRING_JPA_HIBERNATE_DDL_AUTO` |  | 빈 DB 첫 배포 때만 `update` |
 
 - 빈 DB에 처음 배포할 때는 `.env`에 `SPRING_JPA_HIBERNATE_DDL_AUTO=update`를 두어 테이블을 만들고, 첫 배포가 끝나면 그 줄을 지웁니다 (prod 기본값은 `validate`).
 - PostGIS 확장은 postgres 컨테이너가 처음 뜰 때 `DB_NAME` DB에 자동으로 켜집니다.
