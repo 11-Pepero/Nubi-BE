@@ -58,8 +58,27 @@ local 프로필 기본값은 DB `localhost:5432/nubi` `nubi`/`nubi`, Redis `loca
 | `DATA_GO_KR_SERVICE_KEY` | 공공데이터포털 인증키 (Encoding, Decoding 둘 다 됨) |
 | `GG_DATA_KEY` | 경기데이터드림(data.gg.go.kr) 인증키, 장애인복지관 운영 프로그램 수집 |
 | `KAKAO_REST_API_KEY` | 카카오 로컬 API 키, 장소 주소를 좌표로 변환. 카카오 개발자 콘솔에서 앱의 **카카오맵** 사용 설정을 켜야 함 |
+| `OPENAI_API_KEY` | OpenAI API 키, AI 신청서·홍보문·받은 후기 요약. 비우면 AI 없이 초안으로 동작 |
+| `OPENAI_MODEL` | 쓸 OpenAI 모델. 비우면 `gpt-5.5` |
 
 운영에서는 같은 이름의 환경변수로 넣습니다.
+
+## AI 기능
+
+OpenAI Chat Completions(`common/ai/OpenAiClient`)로 JSON 응답을 받습니다. 세 기능 모두 먼저 데이터로 초안을 쓰고, AI에는 그 초안과 같은 사실만 넘겨 문장을 다듬게 합니다.
+
+| 기능 | API | AI가 하는 일 | 코드로 검사하는 것 |
+|---|---|---|---|
+| AI 신청서 쓰기 | `POST /api/v1/applications/{applicationId}/documents` | 신청서·문의 문자·통화 대본 다듬기 | 문의는 확인이 필요한 지원만 묻기, 길이, 신청서 제목 줄 |
+| AI 홍보문 쓰기 | `POST /api/v1/events/{eventId}/promotions` | 일반·쉬운 말·문자용 홍보문 | 쉬운 말은 한 줄 35자·15줄 이내·어려운 낱말 금지, 날짜·정원 숫자 유지 |
+| 받은 후기 요약 | `GET /api/v1/events/{eventId}/reviews/summary` | 후기 요약과 다음 행사 개선점 | 개선점 5개 이내, 항목 길이 |
+
+- 키가 없거나 AI 호출이 실패·지연(60초)되면 초안을 그대로 씁니다. 응답의 `aiWritten`이 `false`면 초안입니다.
+- 검사에 걸린 글은 그 글만 초안으로 바꿉니다.
+- 실명·진단명·기관 이름은 AI에 넘기지 않습니다.
+- 응답에 10초 안팎 걸립니다(신청서·홍보문 약 12초, 후기 요약 약 5초).
+- 테스트는 `OpenAiClient`를 `@MockitoBean`으로 바꿔서 실제 OpenAI를 부르지 않습니다. AI를 쓰는 테스트를 새로 만들 때도 같이 바꿔 주세요(`local-secret.properties`에 키가 있으면 테스트에서도 읽힙니다).
+- 신청 서류 PDF와 포스터 PDF는 AI 없이 만들고, 한글은 나눔고딕(`src/main/resources/fonts`, SIL OFL)을 넣습니다.
 
 ## 공고 수집
 
