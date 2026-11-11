@@ -1,0 +1,89 @@
+name: CI
+
+# PR을 올리거나 develop/main에 push하면 테스트를 돌리고 Docker 이미지가 빌드되는지 확인한다.
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: 테스트
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      # 테스트는 local,test 프로필로 localhost:5432의 nubi_test DB와 localhost:6379 Redis를 쓴다.
+      postgres:
+        image: imresamu/postgis:17-3.5
+        env:
+          POSTGRES_DB: nubi_test
+          POSTGRES_USER: nubi
+          POSTGRES_PASSWORD: nubi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nubi -d nubi_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TZ: Asia/Seoul
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PostGIS 확장 켜기
+        env:
+          PGPASSWORD: nubi
+        run: psql -h localhost -U nubi -d nubi_test -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: 테스트
+        run: |
+          chmod +x gradlew
+          ./gradlew test --no-daemon
+
+      - name: 테스트 결과 올리기
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test
+          retention-days: 7
+
+  docker:
+    name: Docker 이미지 빌드 확인
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: 이미지 빌드 (올리지 않음)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
