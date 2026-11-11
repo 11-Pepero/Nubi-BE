@@ -1,0 +1,62 @@
+# 서버에서 쓰는 compose. 같은 폴더의 .env 값을 읽는다 (항목은 deploy/README.md 참고).
+# CD가 이 파일을 서버의 배포 폴더로 복사하고, APP_IMAGE를 새 이미지로 바꿔 띄운다.
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/11-pepero/nubi-be:latest}
+    container_name: nubi-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      FILE_UPLOAD_DIR: /app/uploads
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      # 행사 사진·후기 사진. 이미지를 바꿔도 남도록 볼륨에 둔다.
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: imresamu/postgis:17-3.5
+    container_name: nubi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Seoul
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: nubi-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres-data:
+  redis-data:
+  uploads:

@@ -1,0 +1,4 @@
+self-hosted-runner:
+  # EC2에 설치한 배포용 셀프 호스티드 러너 라벨
+  labels:
+    - nubi-prod
