@@ -207,7 +207,7 @@ public class PromotionWriter {
     }
 
     // 11월 21일(토) 13:00~16:00
-    private static String generalWhen(Facts facts) {
+    static String generalWhen(Facts facts) {
         String when = "%s(%s) %02d:%02d".formatted(monthDay(facts.startAt()), dayShort(facts.startAt()),
                 facts.startAt().getHour(), facts.startAt().getMinute());
         if (facts.endAt() != null && facts.endAt().toLocalDate().equals(facts.startAt().toLocalDate())) {

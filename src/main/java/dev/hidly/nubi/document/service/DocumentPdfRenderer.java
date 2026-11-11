@@ -1,5 +1,6 @@
 package dev.hidly.nubi.document.service;
 
+import dev.hidly.nubi.common.pdf.PdfFonts;
 import dev.hidly.nubi.document.data.enums.DocumentType;
 import org.openpdf.text.Document;
 import org.openpdf.text.Element;
@@ -8,28 +9,18 @@ import org.openpdf.text.PageSize;
 import org.openpdf.text.Paragraph;
 import org.openpdf.text.pdf.BaseFont;
 import org.openpdf.text.pdf.PdfWriter;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 
-// 서류 내용을 A4 PDF로 만든다. 한글은 나눔고딕(SIL OFL, resources/fonts)을 넣어서 쓴다.
+// 서류 내용을 A4 PDF로 만든다. 한글은 나눔고딕(PdfFonts)을 넣어서 쓴다.
 @Component
 public class DocumentPdfRenderer {
-    private static final String FONT_PATH = "fonts/NanumGothic-Regular.ttf";
-
     private final BaseFont baseFont;
 
-    public DocumentPdfRenderer() {
-        try (InputStream in = new ClassPathResource(FONT_PATH).getInputStream()) {
-            this.baseFont = BaseFont.createFont("NanumGothic-Regular.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED,
-                    true, in.readAllBytes(), null);
-        } catch (IOException e) {
-            throw new IllegalStateException("PDF 글꼴을 읽지 못했습니다: " + FONT_PATH, e);
-        }
+    public DocumentPdfRenderer(PdfFonts pdfFonts) {
+        this.baseFont = pdfFonts.nanumGothic();
     }
 
     public static String titleOf(DocumentType type) {

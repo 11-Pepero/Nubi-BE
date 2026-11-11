@@ -16,27 +16,39 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.openpdf.text.pdf.PdfName;
+import org.openpdf.text.pdf.PdfReader;
+import org.openpdf.text.pdf.parser.PdfTextExtractor;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.ObjectMapper;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "file.upload-dir=build/test-uploads")
 @AutoConfigureMockMvc
 class PromotionApiTest {
     @Autowired
@@ -150,6 +162,66 @@ class PromotionApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.aiWritten").value(true))
                 .andExpect(jsonPath("$.data.easy").value(easy));
+    }
+
+    private static byte[] png() throws Exception {
+        BufferedImage image = new BufferedImage(40, 30, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", out);
+        return out.toByteArray();
+    }
+
+    private byte[] poster(String token, long eventId, String body) throws Exception {
+        var request = post("/api/v1/events/{eventId}/promotions/poster", eventId).header("Authorization", "Bearer " + token);
+        if (body != null) {
+            request.contentType(MediaType.APPLICATION_JSON).content(body);
+        }
+        return mockMvc.perform(request)
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andReturn().getResponse().getContentAsByteArray();
+    }
+
+    private static boolean hasImage(byte[] pdf) throws Exception {
+        PdfReader reader = new PdfReader(pdf);
+        var resources = reader.getPageN(1).getAsDict(PdfName.RESOURCES);
+        return resources != null && resources.getAsDict(PdfName.XOBJECT) != null;
+    }
+
+    @Test
+    void 대표_사진과_행사_정보와_쉬운_말_홍보문을_A4_포스터_PDF로_내려받는다() throws Exception {
+        String token = signUp();
+        long eventId = festival(token);
+        mockMvc.perform(multipart("/api/v1/events/{eventId}/images", eventId)
+                        .file(new MockMultipartFile("images", "cover.png", "image/png", png()))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        byte[] pdf = poster(token, eventId, null);
+        String text = new PdfTextExtractor(new PdfReader(pdf)).getTextFromPage(1);
+        assertThat(text).contains("함께 걷는 가을 축제").contains("정원  40명").contains("센터 강당")
+                .contains("휠체어로 다닐 수 있어요.").contains("주최 용인 주간보호센터");
+        assertThat(hasImage(pdf)).isTrue();
+        verify(openAiClient, never()).completeJson(anyString(), anyString());
+    }
+
+    @Test
+    void 화면에서_고친_쉬운_말을_보내면_그대로_넣고_사진이_없으면_글만_넣는다() throws Exception {
+        String token = signUp();
+        long eventId = festival(token);
+
+        byte[] pdf = poster(token, eventId, objectMapper.writeValueAsString(
+                Map.of("easy", "가을 축제에 같이 가요.\n맛있는 간식도 있어요.")));
+        String text = new PdfTextExtractor(new PdfReader(pdf)).getTextFromPage(1);
+        assertThat(text).contains("맛있는 간식도 있어요.").doesNotContain("휠체어로 다닐 수 있어요.");
+        assertThat(hasImage(pdf)).isFalse();
+    }
+
+    @Test
+    void 포스터도_주최_기관만_내려받는다() throws Exception {
+        long eventId = festival(signUp());
+        mockMvc.perform(post("/api/v1/events/{eventId}/promotions/poster", eventId).header("Authorization", "Bearer " + signUp()))
+                .andExpect(status().isForbidden());
     }
 
     @Test
