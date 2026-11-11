@@ -1,8 +1,8 @@
 name: CD
 
-# main에 머지되면 Docker 이미지를 GHCR에 올리고, SSH로 서버에 접속해 새 이미지로 바꿔 띄운다.
-# 필요한 Secrets: SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, (선택) SSH_PORT, DEPLOY_PATH
-# 서버 준비와 Secrets 설명은 deploy/README.md 참고.
+# main에 머지되면 Docker 이미지를 GHCR에 올리고, EC2에 설치한 셀프 호스티드 러너가 새 이미지로 바꿔 띄운다.
+# 러너가 서버 안에서 GitHub로 먼저 연결하므로 SSH 포트를 열 필요가 없다.
+# 필요한 설정: Variables의 DEPLOY_ENABLED=true, (선택) DEPLOY_PATH. 서버 준비는 deploy/README.md 참고.
 on:
   push:
     branches: [main]
@@ -60,72 +60,54 @@ jobs:
   deploy:
     name: 서버 배포
     needs: build
-    runs-on: ubuntu-latest
+    # 러너를 설치하기 전에는 배포 작업이 러너를 기다리며 멈춰 있지 않도록 변수로 켠다.
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: [self-hosted, linux, nubi-prod]
     timeout-minutes: 15
     environment: production
     env:
-      HAS_SERVER: ${{ secrets.SSH_HOST != '' }}
-      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/opt/nubi' }}
+      APP_IMAGE: ${{ needs.build.outputs.image }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/nubi' }}
     steps:
-      - name: 서버 정보가 없으면 배포 건너뛰기
-        if: env.HAS_SERVER != 'true'
-        run: echo "::warning::SSH_HOST secret이 없어 서버 배포를 건너뜁니다. 이미지는 ${{ needs.build.outputs.image }} 로 올라갔습니다."
-
       - uses: actions/checkout@v4
-        if: env.HAS_SERVER == 'true'
-
-      - name: compose 파일 서버로 복사
-        if: env.HAS_SERVER == 'true'
-        uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          source: deploy/docker-compose.prod.yml
-          target: ${{ env.DEPLOY_PATH }}
-          strip_components: 1
+          sparse-checkout: deploy
+          sparse-checkout-cone-mode: false
+
+      - name: compose 파일 배포 폴더로 복사
+        run: |
+          if [ ! -f "$DEPLOY_PATH/.env" ]; then
+            echo "::error::$DEPLOY_PATH/.env 가 없습니다. deploy/README.md 의 항목대로 만들어 주세요."
+            exit 1
+          fi
+          cp deploy/docker-compose.prod.yml "$DEPLOY_PATH/docker-compose.prod.yml"
+
+      - name: GHCR 로그인
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: 새 이미지로 교체
-        if: env.HAS_SERVER == 'true'
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          APP_IMAGE: ${{ needs.build.outputs.image }}
-          GHCR_USER: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,DEPLOY_PATH
-          command_timeout: 10m
-          script: |
-            set -eu
-            cd "$DEPLOY_PATH"
-            if [ ! -f .env ]; then
-              echo "$DEPLOY_PATH/.env 가 없습니다. deploy/README.md 의 항목대로 만들어 주세요." >&2
-              exit 1
-            fi
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            export APP_IMAGE
-            docker compose -f docker-compose.prod.yml pull app
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            docker logout ghcr.io
+        working-directory: ${{ env.DEPLOY_PATH }}
+        run: |
+          docker compose -f docker-compose.prod.yml pull app
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-            # 앱이 뜰 때까지 최대 3분 기다린다. 뜨지 못하면 로그를 보여 주고 실패로 끝낸다.
-            for i in $(seq 1 90); do
-              if docker logs nubi-app 2>&1 | grep -q "Started NubiApplication"; then
-                echo "배포 완료: $APP_IMAGE"
-                docker image prune -f > /dev/null
-                exit 0
-              fi
-              if [ "$(docker inspect -f '{{.State.Running}}' nubi-app)" != "true" ]; then
-                break
-              fi
-              sleep 2
-            done
-            echo "앱이 정상적으로 뜨지 않았습니다." >&2
-            docker logs --tail 100 nubi-app >&2
-            exit 1
+      - name: 앱이 뜰 때까지 기다리기 (최대 3분)
+        run: |
+          for _ in $(seq 1 90); do
+            if docker logs nubi-app 2>&1 | grep -q "Started NubiApplication"; then
+              echo "배포 완료: $APP_IMAGE"
+              docker image prune -f > /dev/null
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' nubi-app)" != "true" ]; then
+              break
+            fi
+            sleep 2
+          done
+          echo "::error::앱이 정상적으로 뜨지 않았습니다."
+          docker logs --tail 100 nubi-app
+          exit 1
+
+      - name: GHCR 로그아웃
+        if: always()
+        run: docker logout ghcr.io

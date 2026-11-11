@@ -5,7 +5,9 @@
 | 언제 | 워크플로 | 하는 일 |
 |---|---|---|
 | PR, develop·main push | `CI` | PostGIS·Redis를 띄워 `./gradlew test`, Docker 이미지 빌드 확인 |
-| main push (또는 Actions에서 직접 실행) | `CD` | 이미지를 `ghcr.io/11-pepero/nubi-be`에 올리고 SSH로 서버에서 새 이미지로 교체 |
+| main push (또는 Actions에서 직접 실행) | `CD` | 이미지를 `ghcr.io/11-pepero/nubi-be`에 올리고, EC2의 셀프 호스티드 러너가 새 이미지로 교체 |
+
+배포는 EC2 안에 설치한 GitHub 러너가 GitHub로 먼저 연결해 받아 오므로 SSH 포트(22)를 GitHub에 열 필요가 없습니다. 보안 그룹은 SSH를 집 IP로만 막아 둔 그대로 둡니다.
 
 이미지 태그는 `sha-<커밋 7자리>`와 `latest` 두 가지입니다. 되돌릴 때는 서버에서 이전 태그로 띄웁니다.
 
@@ -44,19 +46,31 @@ chmod 600 .env
 - 행사·후기 사진은 `uploads` 볼륨에, DB는 `postgres-data` 볼륨에 남아서 이미지를 바꿔도 지워지지 않습니다.
 - 서버 방화벽(보안 그룹)에서 `APP_PORT`(기본 8080)를 엽니다. HTTPS는 앞단에 Nginx나 로드밸런서를 두어 붙입니다.
 
-## GitHub Secrets
+### 셀프 호스티드 러너 설치
 
-저장소 Settings → Secrets and variables → Actions 에 넣습니다.
+1. 저장소 Settings → Actions → Runners → **New self-hosted runner** → Linux, x64 를 고르면 나오는 명령어를 EC2에서 실행합니다 (Download, Configure).
+2. `./config.sh` 를 실행할 때 라벨을 꼭 붙입니다. CD가 이 라벨이 있는 러너에서만 배포합니다.
+   ```bash
+   ./config.sh --url https://github.com/11-Pepero/Nubi-BE --token <화면의 토큰> --labels nubi-prod --unattended
+   ```
+3. 서버가 재부팅돼도 러너가 다시 뜨게 서비스로 등록합니다.
+   ```bash
+   sudo ./svc.sh install $USER
+   sudo ./svc.sh start
+   ```
+4. 러너를 실행하는 계정이 `docker` 그룹에 있고 `/opt/nubi` 의 주인이어야 합니다 (위 서버 준비를 같은 계정으로 했다면 그대로 됩니다). 그룹을 나중에 추가했다면 `sudo ./svc.sh stop && sudo ./svc.sh start` 로 다시 띄웁니다.
+5. Runners 목록에 `nubi-prod` 러너가 **Idle** 로 보이면 준비 끝입니다.
+
+## GitHub 설정
+
+저장소 Settings → Secrets and variables → Actions → **Variables** 탭에 넣습니다. 비밀값은 GitHub에 넣지 않고 서버 `.env`에만 둡니다.
 
 | 이름 | 필수 | 설명 |
 |---|---|---|
-| `SSH_HOST` | O | 서버 주소. 없으면 CD는 이미지만 올리고 배포는 건너뜁니다 |
-| `SSH_USER` | O | 접속 계정 (docker 그룹에 속해야 함) |
-| `SSH_PRIVATE_KEY` | O | 접속용 개인 키 전체 (`-----BEGIN ... KEY-----` 포함) |
-| `SSH_PORT` |  | 기본 22 |
+| `DEPLOY_ENABLED` | O | `true` 로 두면 배포합니다. 러너를 설치하기 전에는 비워 두세요 (비어 있으면 CD는 이미지만 올립니다) |
 | `DEPLOY_PATH` |  | 기본 `/opt/nubi` |
 
-서버가 GHCR에서 이미지를 받을 때는 배포 중에만 쓰는 `GITHUB_TOKEN`으로 로그인하므로 따로 토큰을 만들 필요가 없습니다.
+러너가 GHCR에서 이미지를 받을 때는 Actions가 자동으로 주는 `GITHUB_TOKEN`으로 로그인하므로 따로 토큰을 만들 필요가 없습니다.
 
 ## 서버에서 직접 다루기
 
