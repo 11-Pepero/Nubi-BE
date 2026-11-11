@@ -40,7 +40,13 @@ chmod 600 .env
 | `DATA_GO_KR_SERVICE_KEY`, `BARRIER_FREE_SERVICE_KEY`, `KAKAO_REST_API_KEY`, `OPENAI_API_KEY`, `GG_DATA_KEY` |  | 외부 API 키. 비우면 그 기능만 꺼집니다 |
 | `COLLECT_ENABLED`, `COLLECT_RUN_ON_STARTUP` |  | 공공데이터 수집 (매일 새벽 5시) |
 | `SPRING_JPA_HIBERNATE_DDL_AUTO` |  | 빈 DB 첫 배포 때만 `update` |
+| `JAVA_TOOL_OPTIONS` |  | 메모리 1GB 서버(t3.micro)에서는 `-Xmx384m -XX:MaxMetaspaceSize=192m -XX:+UseSerialGC -Xss512k -Dfile.encoding=UTF-8` |
 
+- 메모리 1GB 서버(t3.micro)는 DB·Redis·러너만으로 450MB 가량을 써서, 앱까지 뜨면 서버가 멈춥니다. 스왑 2GB를 만들고 위 `JAVA_TOOL_OPTIONS`로 앱 메모리를 묶어 둡니다.
+  ```bash
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  ```
 - 빈 DB에 처음 배포할 때는 `.env`에 `SPRING_JPA_HIBERNATE_DDL_AUTO=update`를 두어 테이블을 만들고, 첫 배포가 끝나면 그 줄을 지웁니다 (prod 기본값은 `validate`).
 - PostGIS 확장은 postgres 컨테이너가 처음 뜰 때 `DB_NAME` DB에 자동으로 켜집니다.
 - 행사·후기 사진은 `uploads` 볼륨에, DB는 `postgres-data` 볼륨에 남아서 이미지를 바꿔도 지워지지 않습니다.
@@ -79,6 +85,10 @@ cd /opt/nubi
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f app
 
-# 이전 버전으로 되돌리기 (GHCR 로그인 필요: echo <PAT> | docker login ghcr.io -u <아이디> --password-stdin)
+# 앱 다시 켜기 (마지막으로 배포한 nubi-be:current 이미지를 씀)
+docker compose -f docker-compose.prod.yml up -d app
+
+# 이전 버전으로 되돌리기: Actions의 CD에서 예전 실행을 Re-run 하거나, 서버에 남아 있는 이미지로 띄운다
+docker images ghcr.io/11-pepero/nubi-be
 APP_IMAGE=ghcr.io/11-pepero/nubi-be:sha-abc1234 docker compose -f docker-compose.prod.yml up -d app
 ```
