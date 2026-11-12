@@ -6,6 +6,7 @@ import dev.hidly.nubi.common.security.SecurityUtil;
 import dev.hidly.nubi.program.data.dto.response.FacilityResponseDto;
 import dev.hidly.nubi.program.data.entity.Program;
 import dev.hidly.nubi.program.data.entity.ProgramCondition;
+import dev.hidly.nubi.program.data.enums.ApplyMethod;
 import dev.hidly.nubi.program.data.enums.ConditionSource;
 import dev.hidly.nubi.program.data.enums.ConditionStatus;
 import dev.hidly.nubi.program.data.enums.FacilityStatus;
@@ -19,6 +20,7 @@ import dev.hidly.nubi.program.service.VenueService;
 import dev.hidly.nubi.promotion.data.dto.response.PromotionResponseDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +41,10 @@ public class PromotionService {
             FacilityType.NO_STEP, "높이 차이 없음",
             FacilityType.PARKING, "장애인 주차",
             FacilityType.BRAILLE_BLOCK, "점자블록");
+
+    // 바로 신청 행사의 QR이 가리킬 프런트 주소. 링크가 없는 행사도 포스터 QR로 상세 화면에 갈 수 있게 한다.
+    @Value("${app.front-base-url:https://nubi-fe-v2.vercel.app}")
+    private String frontBaseUrl;
 
     private final ProgramRepository programRepository;
     private final ProgramConditionRepository programConditionRepository;
@@ -78,9 +84,20 @@ public class PromotionService {
         byte[] pdf = posterPdfRenderer.render(new PosterPdfRenderer.Poster(facts.title(), facts.category(),
                 PromotionWriter.hook(facts.category()), facts.hostName(), facts.startAt(), facts.endAt(), facts.venueName(),
                 program.getVenue() == null ? null : program.getVenue().getAddress(), facts.capacity(), facts.deadlineAt(),
-                facts.applyMethod(), program.getApplyUrl(), facts.contactPhone(), easy, facts.supports(), facts.facilities(), photo));
+                facts.applyMethod(), qrUrl(program), facts.contactPhone(), easy, facts.supports(), facts.facilities(), photo));
         log.info("[poster] 포스터 PDF: eventId={}, 사진 {}, 고친 문구 {}", eventId, photo != null, editedEasy != null && !editedEasy.isBlank());
         return new PosterFile((facts.title() + "_포스터.pdf").replaceAll("[\\\\/:*?\"<>|]", "_"), pdf);
+    }
+
+    // 포스터 QR이 가리킬 주소. 외부 신청 링크가 있으면 그 링크, 누비에서 바로 신청하는 행사는 누비 상세 화면.
+    private String qrUrl(Program program) {
+        if (program.getApplyUrl() != null && !program.getApplyUrl().isBlank()) {
+            return program.getApplyUrl();
+        }
+        if (program.getApplyMethod() == ApplyMethod.DIRECT) {
+            return frontBaseUrl + "/app/programs/" + program.getId();
+        }
+        return null;
     }
 
     // 업로드 폴더 밖은 읽지 않는다. 파일이 없거나 못 읽으면 사진 없이 만든다.
